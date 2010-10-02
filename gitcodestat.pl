@@ -38,6 +38,7 @@ sub ProcessPatchFile
                     push(@totals,{%curfile});
                 }
                 %curfile = ();
+                $curfile{"mode"} = "modified";
             }
             elsif($line =~ /^index .*/)
             {
@@ -106,7 +107,7 @@ sub ProcessPatchFile
                     else
                     {
                         $added += $chunkadd;
-                        $deleted = $chunkdel;
+                        $deleted += $chunkdel;
                     }
                     $chunkadd = 0;
                     $chunkdel = 0;
@@ -125,6 +126,7 @@ sub ProcessPatchFile
                         push(@totals,{%curfile});
                     }
                     %curfile = ();
+                    $curfile{"mode"} = "modified";
                 }
             }
         }
@@ -148,7 +150,7 @@ sub ProcessPatchFile
         else
         {
             $added += $chunkadd;
-            $deleted = $chunkdel;
+            $deleted += $chunkdel;
         }
 
         $curfile{'modified'} = $modified;
