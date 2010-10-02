@@ -1,119 +1,161 @@
 #!/usr/bin/perl -w
 use strict;
-
+my @totals;
 
 sub ProcessPatchFile
 {
-    my @patch = @_;
+    my @patch;
+    @patch = @_;
+
     my $line;
-    print "Process Patch File\n";
 
     # process the header
     my $header = 1;
     my $index = 0;
-    my @curfile;
 
     my $modified = 0;
     my $added = 0;
     my $deleted = 0;
     my $chunkadd = 0;
     my $chunkdel = 0;
-    my $chunk;
+    my $chunk = 0;
     my %curfile;
     my $tmp;
+
 
     foreach $line (@patch)
     {
         chomp($line);
-
-        if($line =~ /^diff --git (.*) (.*)/)
+        if($header == 1)
         {
-            print "here **\n";
-            if(keys(%curfile) != 0)
+            if($line =~ /^diff --git (.*) (.*)/)
             {
-                print "here ***\n";
-                $curfile{'modified'} = $modified;
-                $curfile{"added"}    = $added;
-                $curfile{"deleted"}  = $deleted;
-                push(@patch,%curfile);
-            }
-            %curfile = ();
-        }
-        elsif($line =~ /^index .*/)
-        {
-
-        }
-        elsif($line =~/^similarity index (.*)/)
-        {
-            $curfile{"similarity"} = $1;
-        }
-        elsif($line =~/^(rename|copy) from (.*)/)
-        {
-            $curfile{"mode"} = $1;
-            $curfile{"from"} = $2;
-        }
-        elsif($line =~/^(rename|copy) to (.*)/)
-        {
-            $curfile{"to"} = $2;
-        }
-        elsif($line =~/^new file mode .*/)
-        {
-            $curfile{"mode"} = "new";
-        }
-        elsif(/^--- (.*)/)
-        {
-            $curfile{"orignal"} = $1;
-        }
-        elsif (/^\+\+\+ (.*)/)
-        {
-            $curfile{"new"} = $1;
-        }
-        elsif(/^@@ -(d+),(d+) \+(d+),(d+) @@/)
-        {
-
-        }
-        elsif(/^ .* / && $chunk != 0)
-        {
-            # figure out the added, deleted, modified
-            if($chunkadd != 0 && $chunkdel != 0)
-            {
-                if($chunkadd > $chunkdel)
+                if(keys(%curfile) != 0)
                 {
-                    $modified += $chunkdel;
-                    $added += $chunkadd - $chunkdel;
+                    $curfile{'modified'} = $modified;
+                    $curfile{"added"}    = $added;
+                    $curfile{"deleted"}  = $deleted;
+                    push(@totals,{%curfile});
                 }
-                else
-                {
-                    $modified += $chunkadd;
-                    $deleted += $chunkdel - $chunkadd;
-                }
+                %curfile = ();
             }
-            else
+            elsif($line =~ /^index .*/)
             {
-                $added += $chunkadd;
-                $deleted = $chunkdel;
+
             }
-            $chunkadd = 0;
-            $chunkdel = 0;
-            $chunk = 0;
-        }
-        elsif(/^[-](.*)/)
-        {
-            $chunkdel++;
-            $chunk = 1;
-        }
-        elsif(/^[+](.*)/)
-        {
-            print "line3 :$line\n";
-            $chunkadd++;
-            $chunk = 1;
+            elsif($line =~/^similarity index (.*)/)
+            {
+                $curfile{"similarity"} = $1;
+            }
+            elsif($line =~/^(rename|copy) from (.*)/)
+            {
+                $curfile{"mode"} = $1;
+                $curfile{"from"} = $2;
+            }
+            elsif($line =~/^(rename|copy) to (.*)/)
+            {
+                $curfile{"to"} = $2;
+            }
+            elsif($line =~/^new file mode .*/)
+            {
+                $curfile{"mode"} = "new";
+            }
+            elsif($line =~ /^--- (.*)/)
+            {
+                $curfile{"orignal"} = $1;
+            }
+            elsif ($line =~ /^\+\+\+ (.*)/)
+            {
+                $curfile{"new"} = $1;
+            }
+            elsif($line =~ /^@@(.*)/)
+            {
+                $header = 0; # done with the header
+            }
         }
         else
         {
-            print "line2 :$line\n";
+            if($line =~ /^[-](.*)/)
+            {
+                $chunkdel++;
+                $chunk = 1;
+            }
+            elsif($line =~ /^[+](.*)/)
+            {
+                $chunkadd++;
+                $chunk = 1;
+            }
+            else
+            {
+                # process the chunk stuff
+                if($chunk == 1)
+                {
+                    if($chunkadd != 0 && $chunkdel != 0)
+                    {
+                        if($chunkadd > $chunkdel)
+                        {
+                            $modified += $chunkdel;
+                            $added += $chunkadd - $chunkdel;
+                        }
+                        else
+                        {
+                            $modified += $chunkadd;
+                            $deleted += $chunkdel - $chunkadd;
+                        }
+                    }
+                    else
+                    {
+                        $added += $chunkadd;
+                        $deleted = $chunkdel;
+                    }
+                    $chunkadd = 0;
+                    $chunkdel = 0;
+                    $chunk = 0;
+                }
+                if($line =~ /^diff/)
+                {
+                    # end of the file
+                    $header = 1;
+
+                    if(keys(%curfile) != 0)
+                    {
+                        $curfile{'modified'} = $modified;
+                        $curfile{"added"}    = $added;
+                        $curfile{"deleted"}  = $deleted;
+                        push(@totals,{%curfile});
+                    }
+                    %curfile = ();
+                }
+            }
         }
     }
-    return %curfile;
+    if(keys(%curfile) != 0)
+    {
+        # process the chunk stuff
+        if($chunkadd != 0 && $chunkdel != 0)
+        {
+            if($chunkadd > $chunkdel)
+            {
+                $modified += $chunkdel;
+                $added += $chunkadd - $chunkdel;
+            }
+            else
+            {
+                $modified += $chunkadd;
+                $deleted += $chunkdel - $chunkadd;
+            }
+        }
+        else
+        {
+            $added += $chunkadd;
+            $deleted = $chunkdel;
+        }
+
+        $curfile{'modified'} = $modified;
+        $curfile{"added"}    = $added;
+        $curfile{"deleted"}  = $deleted;
+        push(@totals,{%curfile});
+    }
 }
 
 # input is a list of hashes
@@ -128,17 +170,26 @@ while(<TEST>)
 {
     $rev2 = $_;
     chomp($rev2);
-    print "looking at COMMIT: $rev1..$rev2\n";
     open(PATCH,"git diff -M $rev1..$rev2 |") or die "failed to gif diff";
     my @patch = <PATCH>;
     close(PATCH);
-    my %file;
-    %file = ProcessPatchFile(@patch);
-    my $key;
-    my $value;
-    while(($key,$value) = each (%file))
-    {
-        print "$key : $value\n";
-    }
+
+    ProcessPatchFile(@patch);
+    $totals[-1]{"ref1"} = $rev1;
+    $totals[-1]{"ref2"} = $rev2;
     $rev1 = $rev2;
+}
+
+
+my $key;
+my $href;
+
+for $href ( @totals )
+{
+    print "\nnew commit\n";
+
+    for $key ( keys  %$href )
+    {
+        print "$key : $href->{$key}\n"
+    }
 }
