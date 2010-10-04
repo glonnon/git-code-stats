@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 '''
 Created on Oct 3, 2010
 
@@ -6,6 +8,9 @@ Created on Oct 3, 2010
 from subprocess import PIPE
 import subprocess;
 import re;
+import sys;
+import os.path;
+
 
 class FileStat:
     'FileStat is the files statistics'
@@ -15,7 +20,15 @@ class FileStat:
     added = 0 
     deleted = 0
     modified = 0
-    
+    file_ext = ''
+    def AddFileStat(self,fs):
+        self.added += fs.added
+        self.deleted += fs.deleted
+        self.modified += fs.modified
+    def PrintStats(self):
+        print "total:" + str(self.TotalChanges()) + " added: " + str(self.added) + " deleted: " + str(self.deleted) + "modifed: " + str(self.modified)
+    def TotalChanges(self):
+        return self.added + self.deleted + self.modified
 class PatchStat:
     'PatchStat is the complete patch stat'
     fromref = ""
@@ -92,11 +105,13 @@ def ProcessPatchCodeChurn(ref1, ref2):
                 if(re.match("^diff",line)):
                     # new file, store current file stats and process header
                     header = 1
+                    curFile.file_ext = os.path.splitext(curFile.tofile)[1]
                     patch.files.append(curFile)
                     curFile = FileStat();
                 
     # handle the last chunk for the last file
     ProcessChunk(curFile,chunkadd,chunkdel)
+    curFile.file_ext = os.path.splitext(curFile.tofile)[1]
     patch.files.append(curFile)
                     
     return patch
@@ -107,23 +122,63 @@ def ProcessHistory(startRef,endRef):
 
 
 if __name__ == '__main__':
-    p = subprocess.Popen(["git","rev-list", "--reverse", "test_suite"],stdout=subprocess.PIPE)
+    p = subprocess.Popen(["git","log", "--first-parent","--pretty=%H", "--reverse", "HEAD"],stdout=subprocess.PIPE)
     startRef =ref1= p.stdout.readline().rstrip("\n")
     churn = []
-    
+    commit_count = 0
     for line in p.stdout:
+        if(commit_count % 100 == 0):
+            sys.stdout.write(".")
+            sys.stdout.flush()
+        commit_count += 1
         ref2=line.rstrip("\n")
         patch = ProcessPatchCodeChurn(ref1,ref2)
         churn.append(patch)
         endRef= ref1 = ref2
     p.wait()
     
+    added = 0
+    deleted = 0
+    modified = 0
+    files_new = 0
+    files_renamed = 0
+    files_copied = 0
+    num_commits = 0
+    file_ext_dict  = dict()
     for p in churn:
         print p.fromref + ".." + p.toref
         for f in p.files:
             print "mode: " + f.mode
             print "from:"  + f.fromfile  + " to: " + f.tofile
             print "added: " + str(f.added) + " deleted: " + str(f.deleted) + " modifed: " + str(f.modified)
+            added += f.added
+            deleted += f.deleted
+            modified += f.modified
+            if(f.mode == "new"):
+                files_new += 1
+            elif (f.mode == "copy"):
+                files_copied += 1
+            elif (f.mode == "rename"):
+                files_renamed += 1
+            num_commits += 1
+            if(f.file_ext in file_ext_dict):
+                file_ext_dict[f.file_ext].AddFileStat(f)
+            else:
+                file_ext_dict[f.file_ext] = f
+    
+    print "Totals"
+    print "lines added  : " + str(added)
+    print "lines deleted: " + str(deleted)
+    print "line modifed : " + str(modified) 
+    print "files new    : " + str(files_new)
+    print "files copied : " + str(files_copied)
+    print "files renamed: " + str(files_renamed)
+    print "By file extension"
+    
+    for key, value in file_ext_dict.iteritems():
+        print "file ext:" + key 
+        value.PrintStats()
+            
     
     history = ProcessHistory(startRef,endRef)
 
