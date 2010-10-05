@@ -33,7 +33,7 @@ class FileStat:
         self.PrintStats()
         
     def PrintStats(self):
-        print "total:" + str(self.TotalChanges()) + " added: " + str(self.added) + " deleted: " + str(self.deleted) + "modifed: " + str(self.modified)
+        print "total:" + str(self.TotalChanges()) + " added: " + str(self.added) + " deleted: " + str(self.deleted) + " modified: " + str(self.modified)
     
     def TotalChanges(self):
         return self.added + self.deleted + self.modified
@@ -64,7 +64,7 @@ class LogEntry:
     
 def ProcessLog(refStart, refEnd):
     log=[]
-    p = subprocess.Popen(["git","log","--pretty=author:%ae%ncommitter:%ce%ndate:%aD%ncommit:%H%nparents:%P%nsubject:%s%n@@@@@@",ref1 + ".." + ref2],stdout=PIPE)
+    p = subprocess.Popen(["git","log","--pretty=author:\%ae\%ncommitter:\%ce\%ndate:\%aD\%ncommit:\%H\%nparents:\%P\%nsubject:\%s\%n@@@@@@",ref1 + ".." + ref2],stdout=PIPE)
     for line in p.stdout:
         le = LogEntry()
         if(re.match("^author:)")):
@@ -208,9 +208,14 @@ if __name__ == '__main__':
     files_new = 0
     files_renamed = 0
     files_copied = 0
-    num_commits = 0
+    files_modified = 0
     file_ext_dict  = dict()
     totalFile = FileStat()
+    author_dict = dict()
+    day_of_week = dict()
+    month = dict()
+    
+    # walk thru the commits
     for p in commits:
         print p.fromref + ".." + p.toref
         for f in p.files:
@@ -224,10 +229,14 @@ if __name__ == '__main__':
                 files_copied += 1
             elif (f.mode == "rename"):
                 files_renamed += 1
+            else:
+                files_modified += 1
+                
             if(f.file_ext in file_ext_dict):
                 file_ext_dict[f.file_ext].AddFileStat(f)
             else:
                 file_ext_dict[f.file_ext] = f
+        
     
     print "Totals"
     totalFile.PrintStats()
@@ -235,10 +244,13 @@ if __name__ == '__main__':
     print "files new    : " + str(files_new)
     print "files copied : " + str(files_copied)
     print "files renamed: " + str(files_renamed)
-    print "By file extension"
     
-    for key, value in file_ext_dict.iteritems():
+    
+    print "By file extension"
+    # sort from largest to smallest
+    for key in sorted(file_ext_dict.iterkeys(),reverse=True):
         print "file ext:" + key 
+        value = file_ext_dict[key]
         value.PrintStats()
             
    
