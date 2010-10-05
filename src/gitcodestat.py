@@ -21,19 +21,85 @@ class FileStat:
     deleted = 0
     modified = 0
     file_ext = ''
+    
     def AddFileStat(self,fs):
         self.added += fs.added
         self.deleted += fs.deleted
         self.modified += fs.modified
+
+    def PrintAll(self):
+        print "mode: " + f.mode
+        print "from:"  + f.fromfile  + " to: " + f.tofile
+        self.PrintStats()
+        
     def PrintStats(self):
         print "total:" + str(self.TotalChanges()) + " added: " + str(self.added) + " deleted: " + str(self.deleted) + "modifed: " + str(self.modified)
+    
     def TotalChanges(self):
         return self.added + self.deleted + self.modified
+
 class PatchStat:
     'PatchStat is the complete patch stat'
     fromref = ""
     toref = ""
     files = []
+    file_stats = FileStat()
+    newfiles = 0
+    deletedfiles = 0
+    modifiedfiles = 0
+
+class LogEntry:
+    author = ''
+    committer = ''
+    patch_stats = ''
+    weekday = ''
+    year  = ''
+    month = ''
+    day = ''
+    order = 0 
+    subject = ''
+    parents = []
+    tree_hash = ''
+    commit_hash = ''
+    
+def ProcessLog(refStart, refEnd):
+    log=[]
+    p = subprocess.Popen(["git","log","--pretty=author:%ae%ncommitter:%ce%ndate:%aD%ncommit:%H%nparents:%P%nsubject:%s%n@@@@@@",ref1 + ".." + ref2],stdout=PIPE)
+    for line in p.stdout:
+        le = LogEntry()
+        if(re.match("^author:)")):
+            mo = re.match("^author:(.*)",line)
+            le.author = mo.groups(1)[0]
+        elif(re.match("^committer:)")):
+            mo = re.match("^committer:(.*)",line)
+            le.author = mo.groups(1)[0]
+        elif(re.match("^date:)")):
+            mo = re.match("^date:(.*)",line)
+            le.date = mo.groups(1)[0]
+            mo = re.match("^date:(.*), (d+) (.*) (d+)",line)
+            le.weekday = mo.groups(1)[0]
+            le.day = mo.gruops(2)[0]
+            le.month = mo.groups(3)[0]
+            le.year = mo.groups(4)[0]
+        elif(re.match("^commit:)")):
+            mo = re.match("^commit:(.*)",line)
+            le.commit_hash = mo.groups(1)[0]
+        elif(re.match("^parents:)")):
+            mo = re.match("^parents:((.*) )*",line)
+            le.parents = mo.groups(1)
+        elif(re.match("^commit:)")):
+            mo = re.match("^commit:(.*)",line)
+            le.commit_hash = mo.groups(1)[0]
+        elif(re.match("^subject:)")):
+            mo = re.match("^subject:(.*)",line)
+            le.subject = mo.groups(1)[0]
+        elif(re.match("^@@@@)")):
+            log.append(le)
+            le = LogEntry()
+    p.wait()
+    
+    return log
+    
     
 def ProcessChunk(file,chunkadd,chunkdel):
     if(chunkadd != 0 and chunkdel != 0):
@@ -47,7 +113,6 @@ def ProcessChunk(file,chunkadd,chunkdel):
         file.added += chunkadd
         file.deleted += chunkdel
  
-
 def ProcessPatchCodeChurn(ref1, ref2):
     header = 1
     patch = PatchStat()
@@ -116,26 +181,26 @@ def ProcessPatchCodeChurn(ref1, ref2):
                     
     return patch
 
-def ProcessHistory(startRef,endRef):
-    #p = subprocess.Popen(["git","log"])
-    pass
 
 
 if __name__ == '__main__':
     p = subprocess.Popen(["git","log", "--first-parent","--pretty=%H", "--reverse", "HEAD"],stdout=subprocess.PIPE)
-    startRef =ref1= p.stdout.readline().rstrip("\n")
-    churn = []
-    commit_count = 0
+    startRef = ref1= p.stdout.readline().rstrip("\n")
+    commits = []
+    count = 0
     for line in p.stdout:
-        if(commit_count % 100 == 0):
+        if(count > 100):
             sys.stdout.write(".")
             sys.stdout.flush()
-        commit_count += 1
+            count = 0
+        count += 1
         ref2=line.rstrip("\n")
         patch = ProcessPatchCodeChurn(ref1,ref2)
-        churn.append(patch)
+        commits.append(patch)
         endRef= ref1 = ref2
     p.wait()
+    
+    
     
     added = 0
     deleted = 0
@@ -145,31 +210,28 @@ if __name__ == '__main__':
     files_copied = 0
     num_commits = 0
     file_ext_dict  = dict()
-    for p in churn:
+    totalFile = FileStat()
+    for p in commits:
         print p.fromref + ".." + p.toref
         for f in p.files:
-            print "mode: " + f.mode
-            print "from:"  + f.fromfile  + " to: " + f.tofile
-            print "added: " + str(f.added) + " deleted: " + str(f.deleted) + " modifed: " + str(f.modified)
-            added += f.added
-            deleted += f.deleted
-            modified += f.modified
+            f.PrintAll()
+            
+            totalFile.AddFileStat(f)
+            
             if(f.mode == "new"):
                 files_new += 1
             elif (f.mode == "copy"):
                 files_copied += 1
             elif (f.mode == "rename"):
                 files_renamed += 1
-            num_commits += 1
             if(f.file_ext in file_ext_dict):
                 file_ext_dict[f.file_ext].AddFileStat(f)
             else:
                 file_ext_dict[f.file_ext] = f
     
     print "Totals"
-    print "lines added  : " + str(added)
-    print "lines deleted: " + str(deleted)
-    print "line modifed : " + str(modified) 
+    totalFile.PrintStats()
+   
     print "files new    : " + str(files_new)
     print "files copied : " + str(files_copied)
     print "files renamed: " + str(files_renamed)
@@ -179,8 +241,12 @@ if __name__ == '__main__':
         print "file ext:" + key 
         value.PrintStats()
             
+   
+    log = ProcessLog(startRef,endRef)
+    for le in log:
+        print "author: " + le.author
     
-    history = ProcessHistory(startRef,endRef)
+    print "done"
 
     
 
