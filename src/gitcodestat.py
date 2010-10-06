@@ -64,36 +64,36 @@ class LogEntry:
     
 def ProcessLog(refStart, refEnd):
     log=[]
-    p = subprocess.Popen(["git","log","--pretty=author:\%ae\%ncommitter:\%ce\%ndate:\%aD\%ncommit:\%H\%nparents:\%P\%nsubject:\%s\%n@@@@@@",ref1 + ".." + ref2],stdout=PIPE)
-    for line in p.stdout:
-        le = LogEntry()
-        if(re.match("^author:)")):
+    le = LogEntry()
+    p = subprocess.Popen(["git","log","--pretty=author:\%ae\%ncommitter:\%ce\%ndate:\%aD\%ncommit:\%H\%nparents:\%P\%nsubject:\%s\%n@@@@@@",refStart + ".." +refEnd],stdout=PIPE)
+    for line in p.stdout:     
+        if(re.match("^author",line)):
             mo = re.match("^author:(.*)",line)
             le.author = mo.groups(1)[0]
-        elif(re.match("^committer:)")):
+        elif(re.match("^committer:",line)):
             mo = re.match("^committer:(.*)",line)
-            le.author = mo.groups(1)[0]
-        elif(re.match("^date:)")):
+            le.committer = mo.groups(1)[0]
+        elif(re.match("^date:",line)):
             mo = re.match("^date:(.*)",line)
             le.date = mo.groups(1)[0]
-            mo = re.match("^date:(.*), (d+) (.*) (d+)",line)
-            le.weekday = mo.groups(1)[0]
-            le.day = mo.gruops(2)[0]
-            le.month = mo.groups(3)[0]
-            le.year = mo.groups(4)[0]
-        elif(re.match("^commit:)")):
+            mo = re.match("^date:(.*), (\d+) (\D+) (\d+)",line)
+            le.weekday = mo.group(1)
+            le.day = mo.group(2)
+            le.month = mo.group(3)
+            le.year = mo.group(4)
+        elif(re.match("^commit:",line)):
             mo = re.match("^commit:(.*)",line)
             le.commit_hash = mo.groups(1)[0]
-        elif(re.match("^parents:)")):
+        elif(re.match("^parents:",line)):
             mo = re.match("^parents:((.*) )*",line)
             le.parents = mo.groups(1)
-        elif(re.match("^commit:)")):
+        elif(re.match("^commit:",line)):
             mo = re.match("^commit:(.*)",line)
             le.commit_hash = mo.groups(1)[0]
-        elif(re.match("^subject:)")):
+        elif(re.match("^subject:",line)):
             mo = re.match("^subject:(.*)",line)
             le.subject = mo.groups(1)[0]
-        elif(re.match("^@@@@)")):
+        elif(re.match("^@@@@",line)):
             log.append(le)
             le = LogEntry()
     p.wait()
@@ -177,11 +177,8 @@ def ProcessPatchCodeChurn(ref1, ref2):
     # handle the last chunk for the last file
     ProcessChunk(curFile,chunkadd,chunkdel)
     curFile.file_ext = os.path.splitext(curFile.tofile)[1]
-    patch.files.append(curFile)
-                    
+    patch.files.append(curFile)                    
     return patch
-
-
 
 if __name__ == '__main__':
     p = subprocess.Popen(["git","log", "--first-parent","--pretty=%H", "--reverse", "HEAD"],stdout=subprocess.PIPE)
@@ -236,6 +233,8 @@ if __name__ == '__main__':
                 file_ext_dict[f.file_ext].AddFileStat(f)
             else:
                 file_ext_dict[f.file_ext] = f
+            
+            
         
     
     print "Totals"
