@@ -6,10 +6,13 @@ Created on Oct 3, 2010
 @author: greg
 '''
 from subprocess import PIPE
-import subprocess;
-import re;
-import sys;
-import os.path;
+import subprocess
+import re
+import sys
+import os.path
+import json
+
+
 
 
 class FileStat:
@@ -37,6 +40,25 @@ class FileStat:
     
     def TotalChanges(self):
         return self.added + self.deleted + self.modified
+    
+    def default(self,my_class):
+        if not isinstance(my_class, FileStat):
+            print "You cnann't use the JSON custom MyClassEncoder"
+            return
+        return {'mode': my_class.mode, 'fromfile' : my_class.fromfile, 'tofile' : my_class.tofile , 'added': my_class.added, 
+                'deleted' : my_class.deleted, 'modified' : my_class.modified, 'file_ext' : my_class.file_ext }
+
+
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj,FileStat):
+            return obj.default(obj)
+        elif isinstance(obj,LogEntry):
+            return obj.default(obj)
+        elif isinstance(obj,PatchStat):
+            return obj.default(obj)
+        else:
+            return json.JSONEncoder.default(self,obj)
 
 class PatchStat:
     'PatchStat is the complete patch stat'
@@ -47,6 +69,9 @@ class PatchStat:
     newfiles = 0
     deletedfiles = 0
     modifiedfiles = 0
+    def default(self,obj):
+        return {'fromref' : obj.fromref, 'toref' : obj.toref, 'files' : obj.files, 'file_stats' : obj.file_stats,
+                'newfiles' : obj.newfiles, 'deletedfiles' : obj.deletedfiles, 'modifiedfiles' : obj.modifiedfiles }
 
 class LogEntry:
     author = ''
@@ -61,6 +86,10 @@ class LogEntry:
     parents = []
     tree_hash = ''
     commit_hash = ''
+    def default(self,obj):
+        return {'author' : obj.author , 'committer' : obj.committer, 'patch_stats' : obj.patch_stats, 'weekday' : obj.weekday,
+                'year' : obj.year, 'month' : obj.month, 'day' : obj.day, 'order': obj.order, 'subject' : obj.subject, 'parents' : obj.parents, 
+                'tree_hash' : obj.tree_hash , 'commit_hash' : obj.commit_hash }
     
 def ProcessLog(refStart, refEnd):
     log=[]
@@ -256,6 +285,18 @@ if __name__ == '__main__':
     log = ProcessLog(startRef,endRef)
     for le in log:
         print "author: " + le.author
+    
+    logfile = open('log1.json','w')
+    
+    s= json.dumps(['foo', {'bar': ('baz', None, 1.0, 2)}])
+
+  
+    
+      
+    json.dump(file_ext_dict,logfile,cls=MyEncoder, indent=2)
+    json.dump(log,open('log.json','w'),cls=MyEncoder, indent=2)
+   # s = json.JSONEncoder().dumps(file_ext_dict)
+#        json.dump(log,logfile);
     
     print "done"
 
