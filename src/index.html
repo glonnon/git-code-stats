@@ -10,6 +10,10 @@
 <link type="text/css" href="../queryui/css/ui-darkness/jquery-ui-1.8.5.custom.css" rel="stylesheet" />	
 <script type="text/javascript" src="../queryui/js/jquery-ui-1.8.5.custom.min.js"></script>
 <script type="text/javascript" src="../queryui/js/jquery.dataTables.min.js"></script>
+<script type="text/javascript" src="../queryui/js/raphael.js"></script>
+<script type="text/javascript" src="../queryui/js/g.raphael-min.js"></script>
+<script type="text/javascript" src="../queryui/js/g.dot-min.js"></script>
+<script type="text/javascript" src="../queryui/js/g.bar-min.js"></script>
 
 
 
@@ -55,18 +59,17 @@ function find_log(hash)
 	return null
 }
 var changesByYear = [];
+var changesDuringWeek = []
 function Changes()
 {
-	
-	console.debug("changes")
-	var i = 0;
-	var length = commit.length;
+
+	// changes per week
+	for(var i = 0; i < 24 * 7; i++)
+		changesDuringWeek[i] = 0
 	
 	for(var i = 0, len1 = commit.length; i < len1; i++)
 	{
-		console.log("I am here" + i)
-		console.log("changes %d < %d",i,len1)
-		var c = commit[i]
+		var c = commit[i]	
 		var added = 0;
 		var deleted = 0;
 		var modified = 0;
@@ -77,7 +80,9 @@ function Changes()
 			modified += c.files[j].modified
 		}
 		var log = find_log(c.toref)
-		var year = changesByYear[log.year]
+		var date = new Date(log.timestamp * 1000)
+		var y = date.getFullYear()
+		var year = changesByYear[y]
 		if(!year)
 		{
 			var year  = new Object
@@ -85,12 +90,13 @@ function Changes()
 			year.deleted = 0
 			year.modified = 0
 			year.month = []
-			changesByYear[log.year] = year
+			changesByYear[y] = year
 		}
 		year.added += added
 		year.deleted += deleted
 		year.modified += modified
-		var month = year.month[log.month]
+		m = date.getMonth() +1
+		var month = year.month[m]
 		if(!month)
 		{
 			month = new Object
@@ -98,31 +104,60 @@ function Changes()
 			month.deleted = 0
 			month.modified = 0
 			month.day = []
-			changesByYear[log.year].month[log.month] = month 
+			changesByYear[y].month[m] = month 
 		}
 		month.added += added
 		month.deleted += deleted
 		month.modified += modified
-		var day = month.day[log.day]
+		d = date.getDate()
+		var day = month.day[d]
 		if(!day)
 		{
 			day = new Object
 			day.added = 0
 			day.deleted = 0
 			day.modified = 0
-			changesByYear[log.year].month[log.month].day[log.day] = day
+			changesByYear[y].month[m].day[d] = day
 		}
 		day.added += added
 		day.deleted += deleted
 		day.modified += modified
+	
+		day = date.getDay()
+		hour = date.getHours()
+		changesDuringWeek[(day * 24 + hour)] += 1
 	}
+	console.log("this is done")
 }
-function ChartPerYear()
+function ChangesPerYear()
 {
-	var r = Raphael(10,50,640,480)
-	var c = r.circle(50,40,10)
-	c.attr("fill","#f00")
-	c.attr("stroke","#fff")
+	var r = Raphael("changes-per-year")
+	for(y in changesByYear)
+	{
+			
+		
+	}
+	r.g.barchart(10, 10, 300, 220, [[55, 20, 13, 32, 5, 1, 2, 10], [10, 2, 1, 5, 32, 13, 20, 55]], {stacked: true, type: "soft"}).hoverColumn(fin2, fout2)
+	
+}
+
+function CommitsDotGraphPerWeek()
+{
+	var r = Raphael("holder")
+	   xs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+       ys = [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+       data = changesDuringWeek,
+       axisy = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+       axisx = ["12am", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12pm", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"];
+   r.g.txtattr.font = "11px 'Fontin Sans', Fontin-Sans, sans-serif";
+   r.g.txtattr.fill = "#fff"
+   
+   r.g.dotchart(10, 10, 620, 260, xs, ys, data, {symbol: "o", max: 10, heat: true, axis: "0 0 1 1", axisxstep: 23, axisystep: 6, axisxlabels: axisx, axisxtype: " ", axisytype: " ", axisylabels: axisy}).hover(function () {
+       this.tag = this.tag || r.g.tag(this.x, this.y, this.value, 0, this.r + 2).insertBefore(this);
+       this.tag.show();
+   }, function () {
+       this.tag && this.tag.hide();
+   });
 	
 }
 
@@ -160,11 +195,16 @@ function ChartPerYear()
 			Changes()
 	</script>
 	<h1>Changes Per Year</h1>
+	<div id="changes-per-year"></div>
 	<script type="text/javascript">
-			ChartPerYear()
+	ChangesPerYear()
 	</script>
-	<h1>Changes Per Month</h1>
 	
+	<h1>Changes Per Month</h1>
+	<div id="holder"></div>
+	<script type="text/javascript">
+	CommitsDotGraphPerWeek()
+	</script>
 	<h1>Changes Per Day</h1>
 	
 	Pick two dates

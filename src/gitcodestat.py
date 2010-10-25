@@ -87,10 +87,10 @@ class LogEntry:
                 'timestamp' : obj.timestamp, 'order': obj.order, 'subject' : obj.subject, 'parents' : obj.parents, 
                 'tree_hash' : obj.tree_hash , 'commit_hash' : obj.commit_hash }
     
-def ProcessLog(refStart, refEnd):
+def ProcessLog(wd,refStart, refEnd):
     log=[]
     le = LogEntry()
-    p = subprocess.Popen(["git","log","--pretty=author:%ae%ncommitter:%ce%ndate:%ct%ncommit:%H%nparents:%P%nsubject:%s%n@@@@@@",refStart + ".." +refEnd],stdout=PIPE)
+    p = subprocess.Popen(["git","log","--pretty=author:%ae%ncommitter:%ce%ndate:%ct%ncommit:%H%nparents:%P%nsubject:%s%n@@@@@@",refStart + ".." +refEnd],stdout=PIPE,cwd=wd)
     for line in p.stdout:     
         if(re.match("^author",line)):
             mo = re.match("^author:(.*)\n",line)
@@ -124,9 +124,9 @@ class BranchEntry:
     def default(self,obj):
         return {'ref' : obj.ref , 'hash' : obj.hash }    
     
-def ProcessBranches():
+def ProcessBranches(wd):
     branches = []
-    p = subprocess.Popen(["git","show-ref"],stdout=PIPE)
+    p = subprocess.Popen(["git","show-ref"],stdout=PIPE,cwd=wd)
     for line in p.stdout:
              
         be = BranchEntry()
@@ -145,9 +145,9 @@ class FileEntry:
     def default(self,obj):
         return {'path': obj.path, 'name' : obj.name, 'type' : obj.type }
 
-def ProcessFiles():
+def ProcessFiles(wd):
     files = []
-    p = subprocess.Popen(["git","ls-tree","-r","HEAD"],stdout=PIPE)
+    p = subprocess.Popen(["git","ls-tree","-r","HEAD"],stdout=PIPE,cwd=wd)
     for line in p.stdout:
              
         fe = FileEntry()
@@ -171,7 +171,7 @@ def ProcessChunk(file,chunkadd,chunkdel):
         file.added += chunkadd
         file.deleted += chunkdel
  
-def ProcessPatchCodeChurn(ref1, ref2):
+def ProcessPatchCodeChurn(wd, ref1, ref2):
     header = 1
     patch = PatchStat()
     patch.fromref = ref1
@@ -181,7 +181,7 @@ def ProcessPatchCodeChurn(ref1, ref2):
     chunk = 0
     chunkadd =0
     chunkdel =0
-    p = subprocess.Popen(["git","diff","-M","-C","-p", "--find-copies-harder",ref1 + ".." + ref2],stdout=PIPE)
+    p = subprocess.Popen(["git","diff","-M","-C","-p", "--find-copies-harder",ref1 + ".." + ref2],stdout=PIPE,cwd=wd)
     for line in p.stdout:
         # process the header
         if(header == 1):
@@ -239,7 +239,9 @@ def ProcessPatchCodeChurn(ref1, ref2):
     return patch
 
 if __name__ == '__main__':
-    p = subprocess.Popen(["git","log", "--first-parent","--pretty=%H", "--reverse", "HEAD"],stdout=subprocess.PIPE)
+    wd = sys.argv[1]
+    
+    p = subprocess.Popen(["git","log", "--first-parent","--pretty=%H", "--reverse", "HEAD"],stdout=subprocess.PIPE,cwd=wd)
     startRef = ref1= p.stdout.readline().rstrip("\n")
     commits = []
     count = 0
@@ -250,7 +252,7 @@ if __name__ == '__main__':
             count = 0
         count += 1
         ref2=line.rstrip("\n")
-        patch = ProcessPatchCodeChurn(ref1,ref2)
+        patch = ProcessPatchCodeChurn(wd,ref1,ref2)
         commits.append(patch)
         endRef= ref1 = ref2
     p.wait()
@@ -299,17 +301,9 @@ if __name__ == '__main__':
     print "files copied : " + str(files_copied)
     print "files renamed: " + str(files_renamed)
     
+    log = ProcessLog(wd,startRef,endRef)
     
-    print "By file extension"
-    # sort from largest to smallest
-    for key in sorted(file_ext_dict.iterkeys(),reverse=True):
-        print "file ext:" + key 
-        value = file_ext_dict[key]
-        value.PrintStats()
-            
-    log = ProcessLog(startRef,endRef)
-    
-    branches = ProcessBranches()
+    branches = ProcessBranches(wd)
         
     file = open('file_ext.js','w')
     file.write("var file_ext = ")
