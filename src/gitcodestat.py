@@ -12,9 +12,6 @@ import sys
 import os.path
 import json
 
-
-
-
 class FileStat:
     'FileStat is the files statistics'
     mode = 'modified'
@@ -57,6 +54,8 @@ class MyEncoder(json.JSONEncoder):
             return obj.default(obj)
         elif isinstance(obj,PatchStat):
             return obj.default(obj)
+        elif isinstance(obj,BranchEntry):
+            return obj.default(obj)
         else:
             return json.JSONEncoder.default(self,obj)
 
@@ -77,58 +76,88 @@ class LogEntry:
     author = ''
     committer = ''
     patch_stats = ''
-    weekday = ''
-    year  = ''
-    month = ''
-    day = ''
+    timestamp = 0
     order = 0 
     subject = ''
     parents = []
     tree_hash = ''
     commit_hash = ''
     def default(self,obj):
-        return {'author' : obj.author , 'committer' : obj.committer, 'patch_stats' : obj.patch_stats, 'weekday' : obj.weekday,
-                'year' : obj.year, 'month' : obj.month, 'day' : obj.day, 'order': obj.order, 'subject' : obj.subject, 'parents' : obj.parents, 
+        return {'author' : obj.author , 'committer' : obj.committer, 'patch_stats' : obj.patch_stats,
+                'timestamp' : obj.timestamp, 'order': obj.order, 'subject' : obj.subject, 'parents' : obj.parents, 
                 'tree_hash' : obj.tree_hash , 'commit_hash' : obj.commit_hash }
     
 def ProcessLog(refStart, refEnd):
     log=[]
     le = LogEntry()
-    p = subprocess.Popen(["git","log","--pretty=author:\%ae\%ncommitter:\%ce\%ndate:\%aD\%ncommit:\%H\%nparents:\%P\%nsubject:\%s\%n@@@@@@",refStart + ".." +refEnd],stdout=PIPE)
+    p = subprocess.Popen(["git","log","--pretty=author:%ae%ncommitter:%ce%ndate:%ct%ncommit:%H%nparents:%P%nsubject:%s%n@@@@@@",refStart + ".." +refEnd],stdout=PIPE)
     for line in p.stdout:     
         if(re.match("^author",line)):
-            mo = re.match("^author:(.*)",line)
+            mo = re.match("^author:(.*)\n",line)
             le.author = mo.groups(1)[0]
         elif(re.match("^committer:",line)):
-            mo = re.match("^committer:(.*)",line)
+            mo = re.match("^committer:(.*)\n",line)
             le.committer = mo.groups(1)[0]
         elif(re.match("^date:",line)):
-            mo = re.match("^date:(.*)",line)
-            le.date = mo.groups(1)[0]
-            mo = re.match("^date:(.*), (\d+) (\D+) (\d+)",line)
-            le.weekday = mo.group(1)
-            le.day = mo.group(2)
-            le.month = mo.group(3)
-            le.year = mo.group(4)
+            mo = re.match("^date:(.*)\n",line)
+            le.timestamp = mo.groups(1)[0]
         elif(re.match("^commit:",line)):
-            mo = re.match("^commit:(.*)",line)
+            mo = re.match("^commit:(.*)\n",line)
             le.commit_hash = mo.groups(1)[0]
         elif(re.match("^parents:",line)):
-            mo = re.match("^parents:((.*) )*",line)
-            le.parents = mo.groups(1)
+            le.parents = re.findall("[0-9a-f]{40}",line)
         elif(re.match("^commit:",line)):
-            mo = re.match("^commit:(.*)",line)
+            mo = re.match("^commit:(.*)\n",line)
             le.commit_hash = mo.groups(1)[0]
         elif(re.match("^subject:",line)):
-            mo = re.match("^subject:(.*)",line)
+            mo = re.match("^subject:(.*)\n",line)
             le.subject = mo.groups(1)[0]
         elif(re.match("^@@@@",line)):
             log.append(le)
             le = LogEntry()
     p.wait()
-    
     return log
     
+class BranchEntry:
+    hash = ''
+    ref = ''
+    def default(self,obj):
+        return {'ref' : obj.ref , 'hash' : obj.hash }    
+    
+def ProcessBranches():
+    branches = []
+    p = subprocess.Popen(["git","show-ref"],stdout=PIPE)
+    for line in p.stdout:
+             
+        be = BranchEntry()
+        mo = re.match("(.*) (.*)\n",line)
+        be.ref = mo.groups(1)[1]
+        be.hash = mo.groups(1)[0]
+        branches.append(be)
+    p.wait()
+    return branches
+
+class FileEntry:
+    
+    path = ''
+    name = ''
+    type = 'blob'
+    def default(self,obj):
+        return {'path': obj.path, 'name' : obj.name, 'type' : obj.type }
+
+def ProcessFiles():
+    files = []
+    p = subprocess.Popen(["git","ls-tree","-r","HEAD"],stdout=PIPE)
+    for line in p.stdout:
+             
+        fe = FileEntry()
+        mo = re.match("^(.*) (.*) (.*) (.*)\n",line)
+        fe.type = mo.groups(1)
+        fe.path = mo.groups(2)
+        fe.name = ''
+        files.append(fe)
+    p.wait()
+    return files
     
 def ProcessChunk(file,chunkadd,chunkdel):
     if(chunkadd != 0 and chunkdel != 0):
@@ -262,10 +291,7 @@ if __name__ == '__main__':
                 file_ext_dict[f.file_ext].AddFileStat(f)
             else:
                 file_ext_dict[f.file_ext] = f
-            
-            
-        
-    
+
     print "Totals"
     totalFile.PrintStats()
    
@@ -281,24 +307,27 @@ if __name__ == '__main__':
         value = file_ext_dict[key]
         value.PrintStats()
             
-   
     log = ProcessLog(startRef,endRef)
-    for le in log:
-        print "author: " + le.author
     
-    logfile = open('log1.json','w')
+    branches = ProcessBranches()
+        
+    file = open('file_ext.js','w')
+    file.write("var file_ext = ")
+    json.dump(file_ext_dict,file,cls=MyEncoder,indent=2)
+    file.close()
+    file = open('log.js','w')
+    file.write('var log = ')
+    json.dump(log,file,cls=MyEncoder,indent=2)
+    file.close()
+    file = open('commit.js','w')
+    file.write('var commit = ')
+    json.dump(commits,file,cls=MyEncoder,indent=2)
+    file.close()
+    file = open('ref.js','w')
+    file.write('var ref = ')
+    json.dump(branches,file,cls=MyEncoder,indent=2)
+    file.close()
     
-    s= json.dumps(['foo', {'bar': ('baz', None, 1.0, 2)}])
-
-  
-    
-      
-    json.dump(file_ext_dict,logfile,cls=MyEncoder, indent=2)
-    json.dump(log,open('log.json','w'),cls=MyEncoder, indent=2)
-   # s = json.JSONEncoder().dumps(file_ext_dict)
-#        json.dump(log,logfile);
-    
-    print "done"
 
     
 

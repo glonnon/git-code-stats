@@ -1,0 +1,187 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Insert title here</title>
+<script type="text/javascript" src="log.js"></script>
+<script type="text/javascript" src="commit.js"></script>
+<script type="text/javascript" src="ref.js"></script>
+<script type="text/javascript" src="jquery-1.4.3.js"></script>
+<link type="text/css" href="../queryui/css/ui-darkness/jquery-ui-1.8.5.custom.css" rel="stylesheet" />	
+<script type="text/javascript" src="../queryui/js/jquery-ui-1.8.5.custom.min.js"></script>
+<script type="text/javascript" src="../queryui/js/jquery.dataTables.min.js"></script>
+
+
+
+<script>
+function onLoad()
+{
+	document.write("<table cellpadding=\"0\" cellspacing=\"0\" border=\"0\" class=\"display\" id=\"commit-data\"> ")
+	document.write("<thead><tr><th>Date</th><th>Committer</th><th>Commit Hash</th><th>Subject</th></tr></thead><tbody>")
+	var i = 0
+	var length = log.length
+	while(i < length)
+	{
+		document.write("<tr><td>")
+		var l = log[i]
+		var time = new Date(l.timestamp * 1000)
+		document.write(time.getFullYear() + "-" + (time.getMonth() + 1) + "-"  + time.getDate())
+		document.write("</td><td>")
+		document.write(l.committer)
+		document.write("</td><td>")
+		document.write(l.commit_hash)
+		document.write("</td><td>")
+		document.write(l.subject)
+		i+= 1
+		document.write<"</td></tr>"
+	}
+	document.write("</tbody></table>")
+	
+}
+function showCommit()
+{
+	onLoad()
+	$('#commit-data').dataTable()
+}
+function find_log(hash)
+{
+	for(var i = 0, len = log.length; i < len; i++)
+	{
+		if (log[i].commit_hash == hash)
+		{
+			return log[i];
+		}
+	}
+	return null
+}
+var changesByYear = [];
+function Changes()
+{
+	
+	console.debug("changes")
+	var i = 0;
+	var length = commit.length;
+	
+	for(var i = 0, len1 = commit.length; i < len1; i++)
+	{
+		console.log("I am here" + i)
+		console.log("changes %d < %d",i,len1)
+		var c = commit[i]
+		var added = 0;
+		var deleted = 0;
+		var modified = 0;
+		for(var j =0, len = c.files.length; j < len; j++)
+		{
+			added += c.files[j].added
+			deleted += c.files[j].deleted
+			modified += c.files[j].modified
+		}
+		var log = find_log(c.toref)
+		var year = changesByYear[log.year]
+		if(!year)
+		{
+			var year  = new Object
+			year.added = 0
+			year.deleted = 0
+			year.modified = 0
+			year.month = []
+			changesByYear[log.year] = year
+		}
+		year.added += added
+		year.deleted += deleted
+		year.modified += modified
+		var month = year.month[log.month]
+		if(!month)
+		{
+			month = new Object
+			month.added = 0
+			month.deleted = 0
+			month.modified = 0
+			month.day = []
+			changesByYear[log.year].month[log.month] = month 
+		}
+		month.added += added
+		month.deleted += deleted
+		month.modified += modified
+		var day = month.day[log.day]
+		if(!day)
+		{
+			day = new Object
+			day.added = 0
+			day.deleted = 0
+			day.modified = 0
+			changesByYear[log.year].month[log.month].day[log.day] = day
+		}
+		day.added += added
+		day.deleted += deleted
+		day.modified += modified
+	}
+}
+function ChartPerYear()
+{
+	var r = Raphael(10,50,640,480)
+	var c = r.circle(50,40,10)
+	c.attr("fill","#f00")
+	c.attr("stroke","#fff")
+	
+}
+
+</script>
+</head>
+<body>
+
+<h1>Select the Branch or Tag</h1>
+<h1>Select the Date Range</h1>
+<h1>Select the file scope</h1>
+<script type="text/javascript">
+	$(function() {
+		$("#tabs").tabs();
+	});
+</script>
+
+<div class="demo">
+
+<div id="tabs">
+	<ul>
+		<li><a href="#tabs-commits">Commits</a></li>
+		<li><a href="#tabs-logs">Logs</a></li>
+		<li><a href="#tabs-graphs">Graphs</a></li>
+	</ul>
+	<div id="tabs-commits">
+		<script type="text/javascript">
+			showCommit()
+		</script>
+	</div>
+	<div id="tabs-logs">
+		The logs stuff...
+		</div>
+	<div id="tabs-graphs">
+	<script type="text/javascript">
+			Changes()
+	</script>
+	<h1>Changes Per Year</h1>
+	<script type="text/javascript">
+			ChartPerYear()
+	</script>
+	<h1>Changes Per Month</h1>
+	
+	<h1>Changes Per Day</h1>
+	
+	Pick two dates
+	To:
+	From:
+	Changes per File Extension
+	
+	</div>
+</div>
+
+</div>
+
+<div class="demo-description" style="display: none; ">
+
+<p>Click tabs to swap between content that is broken into logical sections.</p>
+
+</div>
+
+</body>
+</html>
