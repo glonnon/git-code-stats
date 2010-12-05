@@ -359,6 +359,9 @@ if __name__ == '__main__':
             files = report.FindAllFileChanges(commits)
             file_ext = report.FindFilesChangesByExt(files)
             changes = report.TotalChanges(files)
+            print "num of files", len(files)
+            for fn in files.keys():
+                print "filename",fn
             changes.PrintStats()
             commits = []
             commits.append(c)
