@@ -28,8 +28,8 @@ class FileStat:
         self.modified += fs.modified
 
     def PrintAll(self):
-        print "mode: " + f.mode
-        print "from:"  + f.fromfile  + " to: " + f.tofile
+        print "mode: " + self.mode
+        print "from:"  + self.fromfile  + " to: " + self.tofile
         self.PrintStats()
         
     def PrintStats(self):
@@ -253,18 +253,17 @@ class CommitStat:
     
 
 
-def PrintReport(commits,):
+def PrintReport(commits,logs):
     
-    if(details == true)
-    {
+
         # print every commit object
         # number of files added, removed, copied, renamed, deleted
         # number of changes per file extension
         # raw files and changes
      
-    }
     
-    // Summary
+    
+    # Summary
     print "Total changes"
 
 def ProcessRepo(range):
@@ -302,7 +301,6 @@ def ProcessRepo(range):
     for p in commits:
         print p.fromref + ".." + p.toref
         for f in p.files:
-            f.PrintAll()
             
             totalFile.AddFileStat(f)
             
@@ -353,6 +351,8 @@ def ProcessRepo(range):
     
 
 if __name__ == '__main__':
-    wd = sys.argv[1]
-    ProcessRepo(sys.argv[0])
+    # get the current working directory
+    wd = os.getcwd()
+    # the range of commits.
+    ProcessRepo("HEAD")
 
