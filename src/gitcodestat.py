@@ -341,7 +341,7 @@ class Reports:
 def main():
     # the range of commits.
     repoPath="."
-    range="HEAD"
+    range="test_suite_start..test_suite"
     try:
         opts, args = getopt.getopt(sys.argv[1:],"dfir")
     except getopt.GetoptError, err:
@@ -353,7 +353,7 @@ def main():
             filter_out=a 
         elif o == "-i":
             filter_in=a 
-        elif r == "-r":
+        elif o == "-r":
             range=a
          
     repo = Repo(repoPath)
@@ -383,15 +383,18 @@ def main():
         changes = report.TotalChanges(files)
         print "COMMIT"
         log = repo.log[commits[0].ref]
-        print "author :",log.author, " Date :", datetime.datetime.fromtimestamp(float(log.timestamp)), " hash :", commits[0].ref
+        print "author :",log.author, "\nDate :", datetime.datetime.fromtimestamp(float(log.timestamp)), "\nhash :", commits[0].ref
         print "subject:", log.subject
-        print "files:", len(files)
-            
-        for fn,fs in files.iteritems():
-            print "filename :",fn, "stats =",  "added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
+        print "summary:"
         
+        print "files by extension:"    
         for ext,fs in file_ext.iteritems():
             print "file ext ", ext , "stats =",  "added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
+            
+        print "files:", len(files)
+        for fn,fs in files.iteritems():
+            print "filename :",fn, "stats =",  "added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
+
         
     sys.exit(0)
 
