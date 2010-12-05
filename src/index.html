@@ -132,13 +132,63 @@ function Changes()
 function ChangesPerYear()
 {
 	var r = Raphael("changes-per-year")
-	for(y in changesByYear)
+	var modified = []
+	var added = []
+	var deleted = []
+	var year = []
+	for(var y = 0, len = changesByYear.length; y < len; y++)
 	{
-			
-		
+		if(changesByYear[y])
+		{
+			year.push(y)
+			added.push(changesByYear[y].added)
+			modified.push(changesByYear[y].modified)
+			deleted.push(changesByYear[y].deleted)
+		}
+
 	}
-	r.g.barchart(10, 10, 300, 220, [[55, 20, 13, 32, 5, 1, 2, 10], [10, 2, 1, 5, 32, 13, 20, 55]], {stacked: true, type: "soft"}).hoverColumn(fin2, fout2)
+	r.g.barchart(10, 10, 300, 220, [added, modified,deleted], {stacked: true, type: "soft"})
+	r = Raphael("change-per-month-dot-chart")
+	var xs = []
+	var ys = []
+	var i = 1
+	var data = []
+	var axisy = []
 	
+	for(var y = 0, len = changesByYear.length; y < len; y++)
+	{
+		if(changesByYear[y])
+		{
+			var year = changesByYear[y]
+			for(var a =0; a < 12; a++)
+			{
+				xs.push(a)
+				ys.push(i)
+			}
+			i += 1
+			axisy.push(y+'')
+			for(var m = 0; m < 12; m++)
+			{
+				if(year.month[m])
+				{
+					data.push(year.month[m].added + year.month[m].modified + year.month[m].deleted)
+				}
+				else
+				{
+					data.push(0)	
+				}
+			}
+		}
+	}
+	r.g.txtattr.font = "11px 'Fontin Sans', Fontin-Sans, sans-serif";
+	r.g.txtattr.fill = "#fff"
+	axisx = [ "Jan", "Feb", "Mar", "Apr", "May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+	r.g.dotchart(10, 10, 620, 260, xs, ys, data, {symbol: "o", max: 10, heat: true, axis: "0 0 1 1", axisxstep: 23, axisystep: 6, axisxlabels: axisx, axisxtype: " ", axisytype: " ", axisylabels: axisy}).hover(function () {
+	       this.tag = this.tag || r.g.tag(this.x, this.y, this.value, 0, this.r + 2).insertBefore(this);
+	       this.tag.show();
+	   }, function () {
+	       this.tag && this.tag.hide();
+	   });
 }
 
 function CommitsDotGraphPerWeek()
@@ -181,6 +231,7 @@ function CommitsDotGraphPerWeek()
 		<li><a href="#tabs-commits">Commits</a></li>
 		<li><a href="#tabs-logs">Logs</a></li>
 		<li><a href="#tabs-graphs">Graphs</a></li>
+		<li><a href="#tabs-perferences">Perferences</a></li>
 	</ul>
 	<div id="tabs-commits">
 		<script type="text/javascript">
@@ -194,8 +245,9 @@ function CommitsDotGraphPerWeek()
 	<script type="text/javascript">
 			Changes()
 	</script>
-	<h1>Changes Per Year</h1>
+		<h1>Changes Per Year</h1>
 	<div id="changes-per-year"></div>
+	<div id="change-per-month-dot-chart"></div>
 	<script type="text/javascript">
 	ChangesPerYear()
 	</script>
@@ -211,17 +263,26 @@ function CommitsDotGraphPerWeek()
 	To:
 	From:
 	Changes per File Extension
-	
 	</div>
-</div>
+	
+	<div id="tabs-perferences">
+	<script>
+	$(function() {
+		$( "#radio" ).buttonset();
+	});
+	</script>
+		<form>
+			<div id="radio">
+				<input type="radio" id="radioFile" name="radio" /><label for="radio1">Files</label>
+				<input type="radio" id="radioLine" name="radio" checked="checked" /><label for="radio2">Lines</label>
+			</div>
+		</form>
+	</div>
 
 </div>
 
-<div class="demo-description" style="display: none; ">
-
-<p>Click tabs to swap between content that is broken into logical sections.</p>
-
 </div>
+
 
 </body>
 </html>

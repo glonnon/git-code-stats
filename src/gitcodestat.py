@@ -238,10 +238,38 @@ def ProcessPatchCodeChurn(wd, ref1, ref2):
     patch.files.append(curFile)                    
     return patch
 
-if __name__ == '__main__':
-    wd = sys.argv[1]
+class CommitStat:
+    files_added = 0;
+    files_removed = 0;
+    files_renamed = 0;
+    files_copied = 0;
+    files_deleted = 0;
+    binary_files_changed = 0;
     
-    p = subprocess.Popen(["git","log", "--first-parent","--pretty=%H", "--reverse", "HEAD"],stdout=subprocess.PIPE,cwd=wd)
+    files_changed_by_ext = [];
+    total_lines_added = 0;
+    total_lines_removed = 0;
+    total_lines_modifed = 0;
+    
+
+
+def PrintReport(commits,):
+    
+    if(details == true)
+    {
+        # print every commit object
+        # number of files added, removed, copied, renamed, deleted
+        # number of changes per file extension
+        # raw files and changes
+     
+    }
+    
+    // Summary
+    print "Total changes"
+
+def ProcessRepo(range):
+    p = subprocess.Popen(["git","log", "--first-parent",
+                          "--pretty=%H", "--reverse", range ],stdout=subprocess.PIPE,cwd=wd)
     startRef = ref1= p.stdout.readline().rstrip("\n")
     commits = []
     count = 0
@@ -256,8 +284,6 @@ if __name__ == '__main__':
         commits.append(patch)
         endRef= ref1 = ref2
     p.wait()
-    
-    
     
     added = 0
     deleted = 0
@@ -322,7 +348,11 @@ if __name__ == '__main__':
     json.dump(branches,file,cls=MyEncoder,indent=2)
     file.close()
     
-
+    PrintReport(commits,log)
+    
     
 
+if __name__ == '__main__':
+    wd = sys.argv[1]
+    ProcessRepo(sys.argv[0])
 
