@@ -11,6 +11,9 @@ import re
 import sys
 import os.path
 import json
+import datetime
+import getopt
+
 
 class FileStat:
     'FileStat is the files statistics'
@@ -32,7 +35,8 @@ class FileStat:
         print "from:"  + self.fromfile  + " to: " + self.filename
         self.PrintStats()   
     def PrintStats(self):
-        print "total:" + str(self.TotalChanges()) + " added: " + str(self.added) + " deleted: " + str(self.deleted) + " modified: " + str(self.modified)
+        print "total: " + str(self.TotalChanges()) + " added: " + str(self.added) + " deleted: " + str(self.deleted) + " modified: " + str(self.modified) 
+        
     def TotalChanges(self):
         return self.added + self.deleted + self.modified
     def default(self,my_class):
@@ -148,8 +152,7 @@ class PatchStat:
         # handle the last chunk for the last file
         curFile = self.ProcessChunk(curFile,chunkadd,chunkdel)
         curFile.file_ext = os.path.splitext(curFile.filename)[1]
-        self.files.append(curFile)
-        curFile.PrintAll()                    
+        self.files.append(curFile)              
         return self
 
 class CommitStat:
@@ -203,7 +206,7 @@ class Repo:
     refs = []
     
     def __init__(self,path):
-           self.repoPath = path
+        self.repoPath = path
     def ProcessBranches(self,range):
     
         p = subprocess.Popen(["git","show-ref"],stdout=PIPE,cwd=self.repoPath)
@@ -265,6 +268,7 @@ class Repo:
             patch.Process(self.repoPath, startRef,endRef)
             commit = CommitStat();
             commit.patch = patch
+            commit.ref = ref
             
             self.commits.append(commit)
             startRef = endRef
@@ -332,10 +336,28 @@ class Reports:
 # BranchEntry contains the branche information
   
 # MAIN PROGRAM
-if __name__ == '__main__':
+
+
+def main():
     # the range of commits.
-    repo = Repo(os.getcwd())
-    repo.Process("HEAD")
+    repoPath="."
+    range="HEAD"
+    try:
+        opts, args = getopt.getopt(sys.argv[1:],"dfir")
+    except getopt.GetoptError, err:
+            sys.exit(1)
+    for o, a in opts:
+        if o == "-d":
+            repoPath=a
+        elif o == "-f":
+            filter_out=a 
+        elif o == "-i":
+            filter_in=a 
+        elif r == "-r":
+            range=a
+         
+    repo = Repo(repoPath)
+    repo.Process(range)
     
     report = Reports();
     
@@ -352,22 +374,25 @@ if __name__ == '__main__':
         filestat.PrintStats()
         
     print "Foreach Commit:"
-    commits = []
+  
     for c in repo.commits:
+        commits = []
         commits.append(c)
-        if(len(commits) == 2):
-            files = report.FindAllFileChanges(commits)
-            file_ext = report.FindFilesChangesByExt(files)
-            changes = report.TotalChanges(files)
-            print "num of files", len(files)
-            for fn in files.keys():
-                print "filename",fn
-            changes.PrintStats()
-            commits = []
-            commits.append(c)
-
-
-    
+        files = report.FindAllFileChanges(commits)
+        file_ext = report.FindFilesChangesByExt(files)
+        changes = report.TotalChanges(files)
+        print "COMMIT"
+        log = repo.log[commits[0].ref]
+        print "author :",log.author, " Date :", datetime.datetime.fromtimestamp(float(log.timestamp)), " hash :", commits[0].ref
+        print "subject:", log.subject
+        print "files:", len(files)
+            
+        for fn,fs in files.iteritems():
+            print "filename :",fn, "stats =",  "added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
+        
+        for ext,fs in file_ext.iteritems():
+            print "file ext ", ext , "stats =",  "added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
+        
     sys.exit(0)
 
     file = open('log.js','w')
@@ -380,6 +405,8 @@ if __name__ == '__main__':
     file.close()
     file = open('ref.js','w')
     file.write('var ref = ')
-    json.dump(branches,file,cls=MyEncoder,indent=2)
+    #json.dump(branches,file,cls=MyEncoder,indent=2)
     file.close()
 
+if __name__ == '__main__':
+    main()
