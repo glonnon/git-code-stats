@@ -13,34 +13,44 @@ import os.path
 import json
 import datetime
 import getopt
+import copy
 
-
-class FileStat:
-    'FileStat is the files statistics'
-    mode = 'modified'
-    fromfile = ''
-    filename = ''
-    added = 0 
+class BaseStats:
+    added = 0
     deleted = 0
+    moved = 0
     modified = 0
-    file_ext = ''
-
-    def Clone(self):
-        fs = FileStat()
-        fs.mode = self.mode
-        fs.fromfile = self.fromfile
-        fs.filename = self.filename
-        fs.added  = self.added 
-        fs.deleted = self.deleted 
-        fs.modified = self.modified
-        fs.file_ext = self.file_ext
-        return fs
-    def AddFileStat(self,fs):
+    def toArray(self):
+        return [self.added,self.deleted,self.moved,self.modified]
+    def toString(self):
+        s = ""
+        for n in self.toArray():
+            s = s + str(n)
+    def Add(self,fs):
         self.added += fs.added
         self.deleted += fs.deleted
+        self.moved += fs.moved
         self.modified += fs.modified
+            
+class Stats:
+    lines = BaseStats()
+    files = BaseStats()
+    def Add(self,st):
+        self.lines.Add(st.lines)
+        self.files.Add(st.files)
+
+class FileInfo (BaseStats):
+    'FileStat is the files statistics'
+    mode = 'modified'
+    fromfile = None
+    filename = None
+    file_ext = None
+
+    def AddFileInfo(self,fs):
+        self.Add(fs)
     def PrintAll(self):
-        print "mode: " + self.mode
+        if(self.mode != None):
+            print "mode: " + self.mode
         print "from:"  + self.fromfile  + " to: " + self.filename
         self.PrintStats()   
     def PrintStats(self):
@@ -49,21 +59,13 @@ class FileStat:
     def TotalChanges(self):
         return self.added + self.deleted + self.modified
     def default(self,my_class):
-        if not isinstance(my_class, FileStat):
+        if not isinstance(my_class, FileInfo):
             print "You cnann't use the JSON custom MyClassEncoder"
             return
         return {'mode': my_class.mode, 'fromfile' : my_class.fromfile, 'filename' : my_class.filename , 'added': my_class.added, 
                 'deleted' : my_class.deleted, 'modified' : my_class.modified, 'file_ext' : my_class.file_ext }
 
-class FileExtStat:
-    line_added = 0 
-    line_deleted = 0
-    line_modified = 0
-    file_new = 0
-    file_deleted = 0
-    file_modified = 0
-    file_moved = 0
-    file_copied = 0
+class FileExtInfo(Stats):
     file_ext = None
     
     def AddFileStat(self,fs):
@@ -85,43 +87,19 @@ class FileExtStat:
 
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj,FileStat):
+        if isinstance(obj,FileInfo):
             return obj.default(obj)
         elif isinstance(obj,LogEntry):
-            return obj.default(obj)
-        elif isinstance(obj,PatchStat):
             return obj.default(obj)
         elif isinstance(obj,BranchEntry):
             return obj.default(obj)
         else:
             return json.JSONEncoder.default(self,obj)
 
-class CommitStat:
-    'CommitStat is the complete patch stat'
-    files_added = 0
-    files_deleted = 0
-    files_moved = 0
-    files_copied = 0
-    files_modified = 0
-    binary_files_changed = 0
-    
-    ref = ""
-    
-    lines_added = 0
-    lines_removed = 0
-    lines_modifed = 0
-    
-    fromref = ""
-    toref = ""
-    
-    files = []
-    
-    def default(self,obj):
-        return {'fromref' : obj.fromref, 'toref' : obj.toref, 'files' : obj.files, 'file_stats' : obj.file_stats,
-                'newfiles' : obj.newfiles, 'deletedfiles' : obj.deletedfiles, 'modifiedfiles' : obj.modifiedfiles }
-    
-    # helper method to Process    
-    def ProcessChunk(self,file,chunkadd,chunkdel):
+class PatchEngine:
+    # helper method to Process  
+    @staticmethod  
+    def ProcessChunk(file,chunkadd,chunkdel):
         if(chunkadd != 0 and chunkdel != 0):
             if(chunkadd > chunkdel):
                 file.modified += chunkdel
@@ -133,20 +111,15 @@ class CommitStat:
             file.added += chunkadd
             file.deleted += chunkdel
         return file
-      
-    # takes two commit hashes and figures out the changes
-    def ProcessPatch(self, gitRepoPath,path, startRef, endRef):
+    # takes two commit hashes and figures out the changes as an array of fileinfosfiles and lines
+    @staticmethod  
+    def ProcessPatch(gitRepoPath,path, startRef, endRef):
+        curFile = FileInfo()
+        files = []
         header = 1
-        
-        self.fromref = startRef
-        self.toref = endRef
-        self.ref = endRef
-        self.files = []
-        curFile = FileStat()
         chunk = 0
         chunkadd =0
         chunkdel =0
-        modified = 1
         p = subprocess.Popen(["git","diff","-M","-C","-p", "--find-copies-harder",startRef + ".." + endRef,"--",path],stdout=PIPE,cwd=gitRepoPath)
         for line in p.stdout:
             # process the header
@@ -161,25 +134,17 @@ class CommitStat:
                     mo = re.match("^rename from (.*)",line)
                     curFile.mode = "move"
                     curFile.fromfile = str(mo.groups(1)[0])
-                    self.files_moved += 1
-                    modified = 0
                 elif (re.match("^copy from",line)):
                     mo = re.match("^copy from (.*)",line)
                     curFile.mode = "copy"
                     curFile.fromfile = str(mo.groups(1)[0])
-                    self.files_copied += 1
-                    modified = 0
                 elif (re.match("^(rename|copy) to",line)):
                     mo = re.match("^(rename|copy) to (.*)",line)
                     curFile.filename = str(mo.groups(2)[1])
                 elif (re.match("^new file mode",line)):
                     curFile.mode = "new"  
-                    self.files_added += 1
-                    modified = 0  
                 elif (re.match("^deleted file mode",line)):
                     curFile.mode = "deleted"  
-                    self.files_deleted += 1
-                    modified = 0  
                 elif (re.match("^\+\+\+ [ab]/(.*)",line)):
                     mo = re.match("^\+\+\+ [ab]/(.*)",line)
                     curFile.filename = str(mo.groups(1)[0])
@@ -190,8 +155,7 @@ class CommitStat:
                     mo = re.match("^(new|deleted) file mode",line)
                     curFile.mode = str(mo.groups(1)[0])
                 elif (re.match("^@@",line)):
-                    header = 0
-                    self.files_modified += modified               
+                    header = 0   
             else: # process the body of the diff (line differences)
                 # the chunks of the patch files need to be processed
                 if(re.match("^-",line)):
@@ -203,25 +167,41 @@ class CommitStat:
                 else:
                     # process the chunk
                     if(chunk == 1):
-                        curFile = self.ProcessChunk(curFile,chunkadd,chunkdel);
+                        curFile = PatchEngine.ProcessChunk(curFile,chunkadd,chunkdel);
                         chunkdel = chunkadd = chunk = 0
                     
                     if(re.match("^diff",line)):
                         # new file, store current file stats and process header
                         header = 1
-                        modified = 1
                         curFile.file_ext = os.path.splitext(curFile.filename)[1]
-                        self.files.append(curFile)
-                        curFile = FileStat();
+                        files.append(curFile)
+                        curFile = FileInfo();
                 
         # handle the last chunk for the last file
-        curFile = self.ProcessChunk(curFile,chunkadd,chunkdel)
-        chunkdel = chunkadd = chunk = 0
+        curFile = PatchEngine.ProcessChunk(curFile,chunkadd,chunkdel)
         curFile.file_ext = os.path.splitext(curFile.filename)[1]
-        self.files.append(curFile)              
-        return self
+        files.append(curFile)              
+        return files
 
-            
+class Commit:
+    'CommitStat is the complete patch stat'
+    file_st = BaseStats()
+    line_st = BaseStats()    
+    parents = []
+    hash = ""
+    files = None
+    log = None
+    repo = None
+    
+
+    def Process(self):
+        self.files = PatchEngine.ProcessPatch(self.repo.repoPath,self.repo.path , self.parents[0],self.hash)
+        self.log = self.repo.log[self.hash]
+        
+    def default(self,obj):
+        return {'fromref' : obj.fromref, 'toref' : obj.toref, 'files' : obj.files, 'file_stats' : obj.file_stats,
+                'newfiles' : obj.newfiles, 'deletedfiles' : obj.deletedfiles, 'modifiedfiles' : obj.modifiedfiles }
+           
 class LogEntry:
     author = ''
     committer = ''
@@ -238,14 +218,14 @@ class LogEntry:
                 'tree_hash' : obj.tree_hash , 'commit_hash' : obj.commit_hash }
     
 class BranchEntry:
-    hash = ''
-    ref = ''
+    hash = None
+    ref = None
     def default(self,obj):
         return {'ref' : obj.ref , 'hash' : obj.hash }    
     
 class FileEntry:   
-    path = ''
-    name = ''
+    path = None
+    name = None
     type = 'blob'
     def default(self,obj):
         return {'path': obj.path, 'name' : obj.name, 'type' : obj.type }
@@ -259,8 +239,6 @@ class Repo:
     refs = []
     path = ""
     
-    def __init__(self,path):
-        self.repoPath = path
     def ProcessBranches(self,range):
     
         p = subprocess.Popen(["git","show-ref"],stdout=PIPE,cwd=self.repoPath)
@@ -328,8 +306,11 @@ class Repo:
                 count+=1
                 
             endRef = ref
-            commit = CommitStat()
-            commit.ProcessPatch(self.repoPath, self.path, startRef,endRef)            
+            commit = Commit()
+            commit.repo = self
+            commit.hash = endRef
+            commit.parents = [startRef]
+            commit.Process()        
             self.commits.append(commit)
             startRef = endRef
         return
@@ -357,20 +338,31 @@ class Repo:
         #self.ProcessFiles(range)
         return
  
-    
-
 class Reports:
     filter_out = []
     filter_in = []
+    filter = []
     # given a list of commits, returns a summary of changes for each file changed
     
     def Filter(self,name):   
+        # in and then out filtering
+        found_in = True
+        
+        for filter in self.filter_in:
+            found_in = False
+            result = name.find(filter);
+            if(result >= 0):
+                found_in = True
+                break
+        
+        if(not(found_in)):
+            return True
+        
         for filter in self.filter_out:
             result = name.find(filter)
-            if(result != -1):
+            if(result >= 0):
                 return True
         return False
-
         
     def FindAllFileChanges(self,commits):
         files = {}
@@ -381,10 +373,9 @@ class Reports:
                     continue
                   
                 if(f.filename in files):
-                    files[f.filename].AddFileStat(f)
+                    files[f.filename].AddFileInfo(f)
                 else:
-                    files[f.filename] = f.Clone()
-                    
+                    files[f.filename] = copy.deepcopy(f)  
         return files
     
     def FindFilesChangesByExt(self, files):
@@ -392,25 +383,52 @@ class Reports:
         for f in files.values():
             if(self.Filter(f.filename)):
                 continue
-            
             if(f.file_ext in file_ext_dict):
-                file_ext_dict[f.file_ext].AddFileStat(f)
+                file_ext_dict[f.file_ext].AddFileInfo(f)
             else:
-                fes = FileExtStat()
-                fes.file_ext = f.file_ext  
-                fes.AddFileStat(f)
-                file_ext_dict[f.file_ext] = fes
-                
-                
-            
+                file_ext_dict[f.file_ext] =  copy.deepcopy(f)
+                file_ext_dict[f.file_ext].filename = None
+                file_ext_dict[f.file_ext].fromfile = None
+                file_ext_dict[f.file_ext].mode = None
         return file_ext_dict
     
+    def FindStats(self,commits):
+        for c in commits:
+           st = Stats()
+           
+    
     def TotalChanges(self, files):
-        total = FileStat()
+        total = FileInfo()
         for f in files.values():
-            total.AddFileStat(f)
+            total.AddFileInfo(f)
         return total
     
+    def FindCommitsByWeek(self,commits):
+        changes = {}
+        
+        for c in commits:
+            d = datetime.date.fromtimestamp(float(c.log.timestamp))
+            isodate = d.isocalendar()
+            ds = str(isodate[0]) + "-" + str(isodate[1])
+            if not(ds in changes):
+                changes[ds] = []
+            changes[ds].append(c)
+        return changes
+
+    def FindCommitsByWeekday(self,commits):
+        changes = []
+        
+        for c in commits:
+            d = datetime.date.fromtimestamp(float(c.log.timestamp))
+            isodate = d.isocalender()
+            weekday = isodate[2]
+            if(changes[weekday] == None):
+                changes[weekday] = []
+            changes[weekday].append(c)
+
+        return changes
+    
+            
     
 # range and a working directory
 # process every first parent reference
@@ -430,19 +448,23 @@ def main():
     range="master"
     filter_out = []
     filter_in = []
+    filter = []
     path= ""
     
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"d:f:i:r:p:")
+        opts, args = getopt.getopt(sys.argv[1:],"d:o:i:r:p:")
     except getopt.GetoptError:
+            print args
             sys.exit(1)
     for o, a in opts:
         if o == "-d":
             repoPath=a
-        elif o == "-f":
+        elif o == "-o":
             filter_out.append(a)
+            filter.append([0,a])
         elif o == "-i":
             filter_in.append(a)
+            filter.append([1,a])
         elif o == "-r":
             range=a
         elif o == "-p":
@@ -451,12 +473,17 @@ def main():
         
     print "repo path=", repoPath    
     print "filter out = ", filter_out 
-    repo = Repo(repoPath)
+    print "filter in =", filter_in
+    
+    repo = Repo()
     repo.path=path
+    repo.repoPath = repoPath
+    
     repo.Process(range)
     
     report = Reports();
     report.filter_out = filter_out;
+    report.filter_in = filter_in;
     
     files = report.FindAllFileChanges(repo.commits)
     files_ext = report.FindFilesChangesByExt(files)
@@ -466,8 +493,8 @@ def main():
     totalChanges.PrintStats()
     
     print "Total by File extension"
-    for ext,fileextstat in files_ext.iteritems():
-        fileextstat.Print();       
+    for ext,fileextstat in sorted(files_ext.iteritems()):
+        print "file ext : ",ext,fileextstat.PrintStats()     
         
     print "Foreach Commit:"
   
@@ -476,22 +503,29 @@ def main():
         commits.append(c)
         files = report.FindAllFileChanges(commits)
         file_ext = report.FindFilesChangesByExt(files)
-        changes = report.TotalChanges(files)
         print "COMMIT"
-        log = repo.log[c.ref]
-        print "author :",log.author, "\nDate :", datetime.datetime.fromtimestamp(float(log.timestamp)), "\nhash :", commits[0].ref
+        log = c.log
+        print "author :",log.author, "\nDate :", datetime.datetime.fromtimestamp(float(log.timestamp)), "\nhash :", commits[0].hash
         print "subject:", log.subject
         print "summary:"
-        print "files added:", c.files_added, " deleted: ", c.files_deleted, " moved: ", c.files_moved, " copied: ", c.files_copied, " modified: ", c.files_modified
+        print "files:", c.file_st.toString()
         print "files by extension:"    
-        for ext,fileextstat in file_ext.iteritems():
-            fileextstat.Print();
+        for ext,fileextstat in sorted(file_ext.iteritems()):
+            print "file ext : ",ext,fileextstat.PrintStats()     
+            
             
         print "files:", len(files)
         for fn,fs in files.iteritems():
             print "filename :",fn, " added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
 
-        
+    print "By Time"
+    week = report.FindCommitsByWeek(repo.commits)
+    for d,commits in sorted(week.iteritems()):
+        files = report.FindAllFileChanges(commits)
+        changes = report.TotalChanges(files)
+        print "week" , d
+        changes.PrintStats()
+    
     sys.exit(0)
 
     file = open('log.js','w')
