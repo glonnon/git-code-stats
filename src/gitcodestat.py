@@ -25,7 +25,16 @@ class FileStat:
     modified = 0
     file_ext = ''
 
-    
+    def Clone(self):
+        fs = FileStat()
+        fs.mode = self.mode
+        fs.fromfile = self.fromfile
+        fs.filename = self.filename
+        fs.added  = self.added 
+        fs.deleted = self.deleted 
+        fs.modified = self.modified
+        fs.file_ext = self.file_ext
+        return fs
     def AddFileStat(self,fs):
         self.added += fs.added
         self.deleted += fs.deleted
@@ -343,9 +352,10 @@ class Reports:
                 if(self.Filter(f.filename)):
                     continue
                   
-                if(not(f.filename in files)):
-                    files[f.filename] = FileStat()
-                files[f.filename].AddFileStat(f)
+                if(f.filename in files):
+                    files[f.filename].AddFileStat(f)
+                else:
+                    files[f.filename] = f.Clone()
                     
         return files
     
@@ -355,9 +365,10 @@ class Reports:
             if(self.Filter(f.filename)):
                 continue
             
-            if(not (f.file_ext in file_ext_dict)):
-                file_ext_dict[f.file_ext] = FileStat()
-            file_ext_dict[f.file_ext].AddFileStat(f)
+            if(f.file_ext in file_ext_dict):
+                file_ext_dict[f.file_ext].AddFileStat(f)
+            else:  
+                file_ext_dict[f.file_ext] = f.Clone()
             
         return file_ext_dict
     
@@ -383,13 +394,14 @@ def main():
     # the range of commits.
     repoPath="."
     range="test_suite_start..test_suite"
+    range="master"
     filter_out = []
     filter_in = []
     path= ""
     
     try:
         opts, args = getopt.getopt(sys.argv[1:],"d:f:i:r:p:")
-    except getopt.GetoptError, err:
+    except getopt.GetoptError:
             sys.exit(1)
     for o, a in opts:
         if o == "-d":
@@ -422,8 +434,8 @@ def main():
     
     print "Total by File extension"
     for ext,filestat in files_ext.iteritems():
-        print "ext = ",ext, " file stats"
-        filestat.PrintStats()
+        print "file ext = ",ext, " total:", filestat.TotalChanges()," added:", filestat.added, " deleted:",filestat.deleted, " modified", filestat.modified
+       
         
     print "Foreach Commit:"
   
@@ -440,8 +452,8 @@ def main():
         print "summary:"
         print "files added:", c.files_added, " deleted: ", c.files_deleted, " moved: ", c.files_moved, " copied: ", c.files_copied, " modified: ", c.files_modified
         print "files by extension:"    
-        for ext,fs in file_ext.iteritems():
-            print "file ext ", ext , " added: ", fs.added, "deleted: ", fs.deleted, "modified: ", fs.modified
+        for ext,filestat in file_ext.iteritems():
+            print "file ext = ",ext, " total:", filestat.TotalChanges()," added:", filestat.added, " deleted:",filestat.deleted, " modified", filestat.modified
             
         print "files:", len(files)
         for fn,fs in files.iteritems():
