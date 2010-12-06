@@ -528,16 +528,28 @@ def main():
     totalChanges.PrintChurn()
     print "files :",fileChurn.toArray()
     
+    writer = csv.writer(open("total-file-ext-churn.csv","wb"))
+    writer.writerow(["file-ext","lines-added","lines-deleted","lines-moved","lines-modified"])
     print "Total by File extension"
     for ext,fi in sorted(files_ext.iteritems()):
         print "file ext : ",ext,fi.toArray() 
+        row = [ext]
+        row = row + fi.toArray();
+        writer.writerow(row)
     
+    writer = csv.writer(open("total-file-churn.csv","wb"))    
+    writer.writerow(["filename","lines-added","lines-deleted","lines-moved","lines-modified"])
     print "Total By File"
     for fn,fi in sorted(files.iteritems()):
-        print "file: ",fn,fi.PrintChurn()
-    
+        print "file: ",fn,fi.toArray()
+        row = [fn]
+        row = row + fi.toArray()
+        writer.writerow(row)
+        
     print "Foreach Commit:"
   
+    writer = csv.writer(open("commits.csv","wb"))    
+    writer.writerow(["hash","author","date","files-added","files-deleted","files-moved","files-modifed","lines-added","lines-deleted","lines-moved","lines-modified","subject"])
     for c in repo.commits:
         commits = []
         commits.append(c)
@@ -547,6 +559,14 @@ def main():
         file_ext = report.FindFilesChangesByExt(files)
         print "COMMIT"
         log = c.log
+        row = []
+        row.append(c.hash)
+        row.append(c.log.author)
+        row.append(datetime.datetime.fromtimestamp(float(log.timestamp)))
+        row += fileChurn.toArray()
+        row += c.line_churn.toArray()
+        row.append('\"%s\"'%c.log.subject)
+        writer.writerow(row)
         print "author :",log.author, "\nDate :", datetime.datetime.fromtimestamp(float(log.timestamp)), "\nhash :", commits[0].hash
         print "subject:", log.subject
         print "summary:"
