@@ -67,7 +67,7 @@ class FileInfo:
             print "mode: " + self.mode
         print "from:"  + self.fromfile  + " to: " + self.filename
         self.PrintStats()   
-    def PrintStats(self):
+    def PrintChurn(self):
         print self.line_churn.toString()
     def default(self,my_class):
         if not isinstance(my_class, FileInfo):
@@ -125,8 +125,11 @@ class PatchEngine:
         for line in p.stdout:
             # process the header
             if(header == 1):
-                if(re.match("^diff --git",line)):
-                        pass
+                if(re.match("^diff --git a/(.*) b/(.*)",line)):
+                    curFile = FileInfo()
+                    mo = re.match("^diff --git a/(.*) b/(.*)",line)
+                    curFile.fromfile = str(mo.group(1))
+                    curFile.filename = str(mo.group(2))
                 elif (re.match("^index",line)):
                     pass
                 elif (re.match("similarity index",line)):
@@ -134,29 +137,32 @@ class PatchEngine:
                 elif (re.match("^rename from",line)):
                     mo = re.match("^rename from (.*)",line)
                     curFile.mode = "move"
-                    curFile.fromfile = str(mo.groups(1)[0])
+                    curFile.fromfile = str(mo.groups(1))
                 elif (re.match("^copy from",line)):
                     mo = re.match("^copy from (.*)",line)
                     curFile.mode = "copy"
-                    curFile.fromfile = str(mo.groups(1)[0])
+                    curFile.fromfile = str(mo.groups(1))
                 elif (re.match("^(rename|copy) to",line)):
                     mo = re.match("^(rename|copy) to (.*)",line)
-                    curFile.filename = str(mo.groups(2)[1])
+                    curFile.filename = str(mo.groups(2))
                 elif (re.match("^new file mode",line)):
                     curFile.mode = "new"  
                 elif (re.match("^deleted file mode",line)):
                     curFile.mode = "deleted"  
                 elif (re.match("^\+\+\+ [ab]/(.*)",line)):
                     mo = re.match("^\+\+\+ [ab]/(.*)",line)
-                    curFile.filename = str(mo.groups(1)[0])
+                    curFile.filename = str(mo.groups(1))
                 elif (re.match("^--- [ab]/(.*)",line)):
                     mo = re.match("^--- [ab]/(.*)",line)
-                    curFile.fromfile = str(mo.groups(1)[0])
+                    curFile.fromfile = str(mo.groups(1))
                 elif (re.match("^(new|deleted) file mode",line)):
                     mo = re.match("^(new|deleted) file mode",line)
-                    curFile.mode = str(mo.groups(1)[0])
+                    curFile.mode = str(mo.groups(1))
                 elif (re.match("^@@",line)):
                     header = 0   
+                elif (re.match("^\+\+\+ /dev/null",line)):
+                    curFile.filename = curFile.fromfile
+                    
             else: # process the body of the diff (line differences)
                 # the chunks of the patch files need to be processed
                 if(re.match("^-",line)):
@@ -171,15 +177,25 @@ class PatchEngine:
                         curFile = PatchEngine.ProcessChunk(curFile,chunkadd,chunkdel);
                         chunkdel = chunkadd = chunk = 0
                     
-                    if(re.match("^diff",line)):
+                    if(re.match("^diff --git a/(.*) b/(.*)",line)):
                         # new file, store current file stats and process header
                         header = 1
+                        if(curFile.filename == None):
+                            print "unable to parse filename"
+                            return files
                         curFile.file_ext = os.path.splitext(curFile.filename)[1]
                         files.append(curFile)
-                        curFile = FileInfo();
+                        curFile = FileInfo()
+                        mo = re.match("^diff --git a/(.*) b/(.*)",line)
+                        curFile.fromfile = str(mo.group(1))
+                        curFile.filename = str(mo.group(2))
+                        
                 
         # handle the last chunk for the last file
         curFile = PatchEngine.ProcessChunk(curFile,chunkadd,chunkdel)
+        if(curFile.filename == None):
+            print "error: unable to parse filename"
+            return files
         curFile.file_ext = os.path.splitext(curFile.filename)[1]
         files.append(curFile)              
         return files
@@ -423,7 +439,6 @@ class Reports:
     
     def FindCommitsByWeek(self,commits):
         changes = {}
-        
         for c in commits:
             d = datetime.date.fromtimestamp(float(c.log.timestamp))
             isodate = d.isocalendar()
@@ -434,16 +449,14 @@ class Reports:
         return changes
 
     def FindCommitsByWeekday(self,commits):
-        changes = []
-        
+        changes = {}
         for c in commits:
             d = datetime.date.fromtimestamp(float(c.log.timestamp))
-            isodate = d.isocalender()
+            isodate = d.isocalendar()
             weekday = isodate[2]
-            if(changes[weekday] == None):
+            if not(weekday in changes):
                 changes[weekday] = []
             changes[weekday].append(c)
-
         return changes
     
             
@@ -462,8 +475,11 @@ class Reports:
 def main():
     # the range of commits.
     repoPath="."
+    repoPath="/home/greg/projects/git/git"
     range="test_suite_start..test_suite"
     range="master"
+    #range="b7f685a754..6ab69bf"
+    #range="7737314de..40d8cfe4117"
     filter_out = []
     filter_in = []
     filter = []
@@ -508,15 +524,15 @@ def main():
     totalChanges = report.TotalChanges(files)
         
     print "Total Summary:"
-    totalChanges.PrintStats()
+    totalChanges.PrintChurn()
     
     print "Total by File extension"
     for ext,fi in sorted(files_ext.iteritems()):
-        print "file ext : ",ext,fi.PrintStats()     
+        print "file ext : ",ext,fi.PrintChurn()     
     
     print "Total By File"
     for fn,fi in sorted(files.iteritems()):
-        print "file: ",fn,fi.PrintStats()
+        print "file: ",fn,fi.PrintChurn()
     
     print "Foreach Commit:"
   
@@ -532,11 +548,13 @@ def main():
         print "summary:"
         print "files:", c.file_churn.toString()
         print "Total by File extension"
-        for ext,fi in sorted(file_ext.iteritems()):
-            print "file ext : ",ext,fi.PrintStats()     
+        for ext,fi in file_ext.iteritems():
+            print "file ext : ",ext
+            fi.PrintChurn()     
         print "Total By File"
-        for fn,fi in sorted(files.iteritems()):
-            print "file: ",fn,fi.PrintStats()
+        for fn,fi in files.iteritems():
+            print "file: ",fn
+            fi.PrintChurn()
         
 
     print "Week"
@@ -545,7 +563,15 @@ def main():
         files = report.FindAllFileChanges(commits)
         changes = report.TotalChanges(files)
         print "week" , d
-        changes.PrintStats()
+        changes.PrintChurn()
+    
+    print "Weekday (Monday = 1) "
+    weekday = report.FindCommitsByWeekday(repo.commits)
+    for d,commits in sorted(weekday.iteritems()):
+        files = report.FindAllFileChanges(commits)
+        changes = report.TotalChanges(files)
+        print "weekday" , d
+        changes.PrintChurn()
     
     sys.exit(0)
 
