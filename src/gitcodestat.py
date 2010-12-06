@@ -55,6 +55,34 @@ class FileStat:
         return {'mode': my_class.mode, 'fromfile' : my_class.fromfile, 'filename' : my_class.filename , 'added': my_class.added, 
                 'deleted' : my_class.deleted, 'modified' : my_class.modified, 'file_ext' : my_class.file_ext }
 
+class FileExtStat:
+    line_added = 0 
+    line_deleted = 0
+    line_modified = 0
+    file_new = 0
+    file_deleted = 0
+    file_modified = 0
+    file_moved = 0
+    file_copied = 0
+    file_ext = None
+    
+    def AddFileStat(self,fs):
+        self.line_added += fs.added
+        self.line_deleted = fs.deleted
+        self.line_modified += fs.modified
+        if(fs.mode == "new"):
+            self.file_new +=1
+        elif(fs.mode == "copy"):
+            self.file_copied +=1
+        elif(fs.mode == "deleted"):
+            self.file_deleted +=1
+        elif(fs.mode == "move"):
+            self.file_moved += 1
+        elif(fs.mode == "modified"):
+            self.file_modified +=1
+    def Print(self):
+        print "ext:",self.file_ext," files: new :",self.file_new, " deleted:", self.file_deleted," copy:",self.file_copied, " moved:", self.file_moved, " modified:",self.file_modified, "lines: added", self.line_added, " deleted:", self.line_deleted, " modified:",self.line_modified
+
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj,FileStat):
@@ -367,8 +395,13 @@ class Reports:
             
             if(f.file_ext in file_ext_dict):
                 file_ext_dict[f.file_ext].AddFileStat(f)
-            else:  
-                file_ext_dict[f.file_ext] = f.Clone()
+            else:
+                fes = FileExtStat()
+                fes.file_ext = f.file_ext  
+                fes.AddFileStat(f)
+                file_ext_dict[f.file_ext] = fes
+                
+                
             
         return file_ext_dict
     
@@ -433,9 +466,8 @@ def main():
     totalChanges.PrintStats()
     
     print "Total by File extension"
-    for ext,filestat in files_ext.iteritems():
-        print "file ext = ",ext, " total:", filestat.TotalChanges()," added:", filestat.added, " deleted:",filestat.deleted, " modified", filestat.modified
-       
+    for ext,fileextstat in files_ext.iteritems():
+        fileextstat.Print();       
         
     print "Foreach Commit:"
   
@@ -452,8 +484,8 @@ def main():
         print "summary:"
         print "files added:", c.files_added, " deleted: ", c.files_deleted, " moved: ", c.files_moved, " copied: ", c.files_copied, " modified: ", c.files_modified
         print "files by extension:"    
-        for ext,filestat in file_ext.iteritems():
-            print "file ext = ",ext, " total:", filestat.TotalChanges()," added:", filestat.added, " deleted:",filestat.deleted, " modified", filestat.modified
+        for ext,fileextstat in file_ext.iteritems():
+            fileextstat.Print();
             
         print "files:", len(files)
         for fn,fs in files.iteritems():
