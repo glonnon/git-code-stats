@@ -14,6 +14,7 @@ import json
 import datetime
 import getopt
 import copy
+import csv
 
 # churn is the amount of changes in a given file, commit, repo.
 # it can be based on either files or lines
@@ -83,6 +84,8 @@ class FileInfo:
         fi.file_ext = self.file_ext
         fi.line_churn = self.line_churn.Clone()
         return fi
+    def toArray(self):
+        return self.line_churn.toArray()
     def Print(self):
         print "ext:",self.file_ext," files: new :",self.file_new, " deleted:", self.file_deleted," copy:",self.file_copied, " moved:", self.file_moved, " modified:",self.file_modified, "lines: added", self.line_added, " deleted:", self.line_deleted, " modified:",self.line_modified
 
@@ -151,10 +154,10 @@ class PatchEngine:
                     curFile.mode = "deleted"  
                 elif (re.match("^\+\+\+ [ab]/(.*)",line)):
                     mo = re.match("^\+\+\+ [ab]/(.*)",line)
-                    curFile.filename = str(mo.groups(1))
+                    curFile.filename = str(mo.groups(1)[0])
                 elif (re.match("^--- [ab]/(.*)",line)):
                     mo = re.match("^--- [ab]/(.*)",line)
-                    curFile.fromfile = str(mo.groups(1))
+                    curFile.fromfile = str(mo.groups(1)[0])
                 elif (re.match("^(new|deleted) file mode",line)):
                     mo = re.match("^(new|deleted) file mode",line)
                     curFile.mode = str(mo.groups(1))
@@ -202,8 +205,6 @@ class PatchEngine:
 
 class Commit:
     'CommitStat is the complete patch stat'
-   
-    
     def __init__(self):
         self.file_churn = Churn()
         self.line_churn = Churn()    
@@ -212,7 +213,6 @@ class Commit:
         self.files = None
         self.log = None
         self.repo = None
-    
     def Process(self):
         self.files = PatchEngine.ProcessPatch(self.repo.repoPath,self.repo.path , self.parents[0],self.hash)
         self.log = self.repo.log[self.hash]
@@ -230,9 +230,6 @@ class Commit:
                 self.file_churn.moved += 1
             elif(f.mode == "modified"):
                 self.file_churn.modified +=1
-            
-            
-        
     def default(self,obj):
         return {'fromref' : obj.fromref, 'toref' : obj.toref, 'files' : obj.files, 'file_stats' : obj.file_stats,
                 'newfiles' : obj.newfiles, 'deletedfiles' : obj.deletedfiles, 'modifiedfiles' : obj.modifiedfiles }
@@ -404,7 +401,7 @@ class Reports:
         
     def FindAllFileChanges(self,commits):
         files = {}
-        
+        fileChurn = Churn()
         for c in commits:
             for f in  c.files:   
                 if(self.Filter(f.filename)):
@@ -413,8 +410,9 @@ class Reports:
                 if(f.filename in files):
                     files[f.filename].Add(f)
                 else:
-                    files[f.filename] = f.Clone() 
-        return files
+                    files[f.filename] = f.Clone()
+            fileChurn.Add(c.file_churn);
+        return [files,fileChurn]
     
     def FindFilesChangesByExt(self, files):
         file_ext_dict = {}
@@ -435,6 +433,7 @@ class Reports:
         total = FileInfo()
         for f in files.values():
             total.Add(f)
+            
         return total
     
     def FindCommitsByWeek(self,commits):
@@ -442,7 +441,7 @@ class Reports:
         for c in commits:
             d = datetime.date.fromtimestamp(float(c.log.timestamp))
             isodate = d.isocalendar()
-            ds = str(isodate[0]) + "-" + str(isodate[1])
+            ds = "%(year)04d-%(week)02d" %{"year":isodate[0], "week":isodate[1]}
             if not(ds in changes):
                 changes[ds] = []
             changes[ds].append(c)
@@ -475,7 +474,7 @@ class Reports:
 def main():
     # the range of commits.
     repoPath="."
-    repoPath="/home/greg/projects/git/git"
+    #repoPath="/home/greg/projects/git/git"
     range="test_suite_start..test_suite"
     range="master"
     #range="b7f685a754..6ab69bf"
@@ -519,16 +518,19 @@ def main():
     report.filter_out = filter_out;
     report.filter_in = filter_in;
     
-    files = report.FindAllFileChanges(repo.commits)
+    a = report.FindAllFileChanges(repo.commits)
+    files = a[0]
+    fileChurn = a[1]
     files_ext = report.FindFilesChangesByExt(files)
     totalChanges = report.TotalChanges(files)
         
     print "Total Summary:"
     totalChanges.PrintChurn()
+    print "files :",fileChurn.toArray()
     
     print "Total by File extension"
     for ext,fi in sorted(files_ext.iteritems()):
-        print "file ext : ",ext,fi.PrintChurn()     
+        print "file ext : ",ext,fi.toArray() 
     
     print "Total By File"
     for fn,fi in sorted(files.iteritems()):
@@ -539,7 +541,9 @@ def main():
     for c in repo.commits:
         commits = []
         commits.append(c)
-        files = report.FindAllFileChanges(commits)
+        a = report.FindAllFileChanges(commits)
+        files = a[0]
+        fileChurn = a[1]
         file_ext = report.FindFilesChangesByExt(files)
         print "COMMIT"
         log = c.log
@@ -557,21 +561,43 @@ def main():
             fi.PrintChurn()
         
 
+    writer = csv.writer(open("week-churn.csv","wb"))
+    writer.writerow(["week","commits","files-added","files-deleted","files-moved","files-modified","lines-added","lines-deleted","lines-moved","lines-modified"])
     print "Week"
     week = report.FindCommitsByWeek(repo.commits)
     for d,commits in sorted(week.iteritems()):
-        files = report.FindAllFileChanges(commits)
+        a = report.FindAllFileChanges(commits)
+        files = a[0]
+        fileChurn = a[1]
         changes = report.TotalChanges(files)
         print "week" , d
         changes.PrintChurn()
-    
+        row = [d]
+        row.append(len(commits))
+        row += fileChurn.toArray()
+        row += changes.toArray()
+        writer.writerow(row)
+        print "week:", row
+        
+       
+    writer = csv.writer(open("weekday-churn.csv","wb"))
+    writer.writerow(["week","commits","files-added","files-deleted","files-moved","files-modified","lines-added","lines-deleted","lines-moved","lines-modified"])
     print "Weekday (Monday = 1) "
     weekday = report.FindCommitsByWeekday(repo.commits)
     for d,commits in sorted(weekday.iteritems()):
-        files = report.FindAllFileChanges(commits)
+        a = report.FindAllFileChanges(commits)
+        files = a[0]
+        fileChurn = a[1]
         changes = report.TotalChanges(files)
         print "weekday" , d
         changes.PrintChurn()
+        row = [d]
+        row.append(len(commits))
+        row += fileChurn.toArray()
+        row += changes.toArray()
+        writer.writerow(row)
+        print "weekday:", row
+    
     
     sys.exit(0)
 
