@@ -131,8 +131,8 @@ class PatchEngine:
                 if(re.match("^diff --git a/(.*) b/(.*)",line)):
                     curFile = FileInfo()
                     mo = re.match("^diff --git a/(.*) b/(.*)",line)
-                    curFile.fromfile = str(mo.group(1))
-                    curFile.filename = str(mo.group(2))
+                    curFile.fromfile = str(mo.group(1)[0])
+                    curFile.filename = str(mo.group(2)[0])
                 elif (re.match("^index",line)):
                     pass
                 elif (re.match("similarity index",line)):
@@ -140,14 +140,14 @@ class PatchEngine:
                 elif (re.match("^rename from",line)):
                     mo = re.match("^rename from (.*)",line)
                     curFile.mode = "move"
-                    curFile.fromfile = str(mo.groups(1))
+                    curFile.fromfile = str(mo.groups(1)[0])
                 elif (re.match("^copy from",line)):
                     mo = re.match("^copy from (.*)",line)
                     curFile.mode = "copy"
-                    curFile.fromfile = str(mo.groups(1))
+                    curFile.fromfile = str(mo.groups(1)[0])
                 elif (re.match("^(rename|copy) to",line)):
                     mo = re.match("^(rename|copy) to (.*)",line)
-                    curFile.filename = str(mo.groups(2))
+                    curFile.filename = str(mo.groups(2)[0])
                 elif (re.match("^new file mode",line)):
                     curFile.mode = "new"  
                 elif (re.match("^deleted file mode",line)):
@@ -190,8 +190,8 @@ class PatchEngine:
                         files.append(curFile)
                         curFile = FileInfo()
                         mo = re.match("^diff --git a/(.*) b/(.*)",line)
-                        curFile.fromfile = str(mo.group(1))
-                        curFile.filename = str(mo.group(2))
+                        curFile.fromfile = str(mo.group(1)[0])
+                        curFile.filename = str(mo.group(2)[0])
                         
                 
         # handle the last chunk for the last file
