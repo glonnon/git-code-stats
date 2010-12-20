@@ -383,8 +383,8 @@ class Reports:
         
         for filter in self.filter_in:
             found_in = False
-            result = name.find(filter);
-            if(result >= 0):
+            mo = re.match(filter,name)
+            if(mo is not None):
                 found_in = True
                 break
         
@@ -392,8 +392,8 @@ class Reports:
             return True
         
         for filter in self.filter_out:
-            result = name.find(filter)
-            if(result >= 0):
+            mo = re.match(filter,name)
+            if(mo is None):
                 return True
         return False
         
@@ -479,12 +479,12 @@ class Reports:
 def main():
     # the range of commits.
     repoPath="."
-    #repoPath="/home/greg/projects/git/git"
+    #repoPath="/home/greg/projects/goldencheetah/sea/GoldenCheetah
     range="test_suite_start..test_suite"
     range="master"
     #range="b7f685a754..6ab69bf"
     #range="7737314de..40d8cfe4117"
-    filter_out = []
+    filter_out = ["*.h"]
     filter_in = []
     filter = []
     path= ""
