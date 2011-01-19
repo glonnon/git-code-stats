@@ -162,11 +162,13 @@ sub ProcessPatchFile
 
 # input is a list of hashes
 
-open(TEST,"git rev-list --reverse HEAD |");
+open(TEST,"git rev-list --reverse test_suite |");
 
 my $rev1 = <TEST>;
 chomp($rev1);
 my $rev2;
+my %commits;
+
 
 while(<TEST>)
 {
@@ -175,8 +177,9 @@ while(<TEST>)
     open(PATCH,"git diff -M $rev1..$rev2 |") or die "failed to gif diff";
     my @patch = <PATCH>;
     close(PATCH);
-
+    %totals = ();
     ProcessPatchFile(@patch);
+    
     $totals[-1]{"ref1"} = $rev1;
     $totals[-1]{"ref2"} = $rev2;
     $rev1 = $rev2;
